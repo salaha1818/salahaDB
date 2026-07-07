@@ -1,0 +1,29 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build SalahaDB",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-std=c++20",
+                "-I",
+                "include",
+                "src/main.cpp",
+                "src/Parser.cpp",
+                "src/Database.cpp",
+                "src/StorageEngine.cpp",
+                "src/Serializer.cpp",
+                "-o",
+                "SalahaDB.exe"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        }
+    ]
+}
