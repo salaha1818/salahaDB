@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include "StorageEngine.h"
+#include "StorageEngine.h"
 #include <vector>
 #include <cstdint>
 #include "Record.h"
@@ -12,7 +15,11 @@ private:
     void insert(const std::vector<std::string>& arguments);
     void deleteRecord(const std::vector<std::string>& arguments);
     void select() const;
-
+    StorageEngine storage;
+    void updateRecord(const std::vector<std::string>& arguments);
 public:
     void execute(const Command& cmd);
+    Database(const std::string& filename);
+    void load();
+    void save();
 };
