@@ -14,7 +14,7 @@ private:
     uint32_t nextID = 1;
     void insert(const std::vector<std::string>& arguments);
     void deleteRecord(const std::vector<std::string>& arguments);
-    void select() const;
+    void select(const std::vector<std::string>& arguments) const;
     void find(const std::vector<std::string>& arguments);
     void help() const;
     StorageEngine storage;

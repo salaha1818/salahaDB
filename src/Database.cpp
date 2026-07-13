@@ -33,7 +33,7 @@ void Database::execute(const Command& cmd){
     } else if(cmd.type == "delete"){
         deleteRecord(cmd.arguments);
     } else if(cmd.type == "select"){
-        select();
+        select(cmd.arguments);
     } else if (cmd.type == "update") {
         updateRecord(cmd.arguments);
     } else if (cmd.type == "find") {
@@ -82,10 +82,50 @@ void Database::deleteRecord(const std::vector<std::string>& arguments){
     std::cout << "Record does not exist." << std::endl;
 }
 
-void Database::select() const{
-    for(const auto& record : records){
-        if(record.deleted == false) {
-            printRecord(record);
+void Database::select(const std::vector<std::string>& arguments) const{
+    bool found = false;
+    if(arguments.size() == 0) {
+        for(const auto& record : records){
+            if(record.deleted == false) {
+                printRecord(record);
+                found = true;
+            }
+        } 
+        if(!found) {
+            std::cout << "No records found." << std::endl;
+        }
+    }
+    else if (arguments.size() == 2){
+        if(arguments[0] == "age") {
+            int age = toInt(arguments[1]);
+            if(age == -1){
+                std::cout << "Invalid command." << std::endl;
+                return;
+            }
+            for(const auto& record : records){
+                if(record.age == age && record.deleted == false) {
+                    printRecord(record);
+                    found = true;
+                }
+            } 
+        } 
+        
+        else if (arguments[0] == "name") {
+            for(const auto& record : records){
+                if(record.name == arguments[1] && record.deleted == false) {
+                    printRecord(record);
+                    found = true;
+                }
+            } 
+        }
+
+        else {
+            std::cout << "Invalid filter." << std::endl;
+            return;
+        }
+
+        if(!found) {
+            std::cout << "No matching records found." << std::endl;
         }
     }
 }
@@ -158,3 +198,8 @@ void Database::printRecord(const Record& record) const {
     std::cout << "Name: " << record.name <<std::endl;
     std::cout << "Age: " << record.age << std::endl << std::endl;
 }
+
+
+
+
+
