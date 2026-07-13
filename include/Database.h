@@ -15,8 +15,11 @@ private:
     void insert(const std::vector<std::string>& arguments);
     void deleteRecord(const std::vector<std::string>& arguments);
     void select() const;
+    void find(const std::vector<std::string>& arguments);
+    void help() const;
     StorageEngine storage;
     void updateRecord(const std::vector<std::string>& arguments);
+    void printRecord(const Record& record) const;
 public:
     void execute(const Command& cmd);
     Database(const std::string& filename);

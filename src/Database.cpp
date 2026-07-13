@@ -36,6 +36,10 @@ void Database::execute(const Command& cmd){
         select();
     } else if (cmd.type == "update") {
         updateRecord(cmd.arguments);
+    } else if (cmd.type == "find") {
+        find(cmd.arguments);
+    } else if (cmd.type == "help") {
+        help();
     } else {}
 }
 
@@ -81,11 +85,40 @@ void Database::deleteRecord(const std::vector<std::string>& arguments){
 void Database::select() const{
     for(const auto& record : records){
         if(record.deleted == false) {
-            std::cout << "ID: " << record.id <<std::endl;
-            std::cout << "Name: " << record.name <<std::endl;
-            std::cout << "Age: " << record.age << std::endl << std::endl;
+            printRecord(record);
         }
     }
+}
+
+void Database::help() const {
+    std::cout << "Available Commands:" << std::endl << "----------------------" << std::endl;
+    std::cout << "insert <name> <age>         Insert a new record." << std::endl;
+    std::cout << "select                      Display all active records." << std::endl;
+    std::cout << "update <id> <name> <age>    Update an existing record." << std::endl;
+    std::cout << "find <id>                   Find a record by ID." << std::endl;
+    std::cout << "delete <id>                 Soft delete a record." << std::endl;
+    std::cout << "help                        Display help menu." << std::endl;
+    std::cout << "exit                        Exit the program." << std::endl;
+}
+
+void Database::find(const std::vector<std::string>& arguments){
+    if(arguments.size() != 1) return;
+    int id = toInt(arguments[0]);
+    if(id == -1) {
+        std::cout << "Invalid command." << std::endl;
+        return;
+    }
+    for(const auto& record : records){
+        if(record.id == id) {
+            if (record.deleted){
+                std::cout << "ID has been deleted." << std::endl;
+                return;
+            }
+            printRecord(record);
+            return;
+        }
+    }
+    std::cout << "ID does not exist." << std::endl;
 }
 
 void Database::updateRecord(const std::vector<std::string>& arguments) {
@@ -118,4 +151,10 @@ int toInt(std::string value) {
     if(num >= 0) {
         return num;
     } else return -1;
+}
+
+void Database::printRecord(const Record& record) const {
+    std::cout << "ID: " << record.id <<std::endl;
+    std::cout << "Name: " << record.name <<std::endl;
+    std::cout << "Age: " << record.age << std::endl << std::endl;
 }
