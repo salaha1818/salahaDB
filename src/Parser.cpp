@@ -18,7 +18,7 @@ bool Parser::parse(std::string input, Command& cmd) {
         arguments.push_back(token);
     }
 
-    if((type == "update" && arguments.size() == 3) || (type == "insert" && arguments.size() == 2) || (type == "delete" && arguments.size() == 1) || ((type == "select" || type == "help" || type == "exit") && arguments.size() == 0)){
+    if((type == "update" && arguments.size() == 3) || (type == "insert" && arguments.size() == 2) || (type == "delete" && arguments.size() == 1) || ((type == "select" || type == "help" || type == "exit") && arguments.size() == 0) || (type == "select" && (arguments.size() == 0 || arguments.size() == 2)) || (type == "find" && arguments.size() == 1)){
         valid = true;
         cmd.type = type;
         cmd.arguments = arguments;

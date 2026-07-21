@@ -7,6 +7,7 @@
 #include <cstdint>
 #include "Record.h"
 #include "Command.h"
+#include <unordered_map>
 
 class Database {
 private:
@@ -19,7 +20,14 @@ private:
     void help() const;
     StorageEngine storage;
     void updateRecord(const std::vector<std::string>& arguments);
+    void sortAge(std::vector <Record>& records) const;
+    void sortName(std::vector <Record>& records) const;
     void printRecord(const Record& record) const;
+    void removeIdFromAge(int age, int id);
+    void removeIdFromName(std::string name, int id);
+    std::unordered_map<int, int> indices;
+    std::unordered_map<std::string, std::vector<int>> names;
+    std::unordered_map<int, std::vector<int>> ages;
 public:
     void execute(const Command& cmd);
     Database(const std::string& filename);

@@ -2,10 +2,15 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <limits>
 #include "Record.h"
 #include "Parser.h"
 #include "Command.h"
 #include "Database.h"
+
+bool isBlank(const std::string& s) {
+    return s.find_first_not_of(" \t\r\n") == std::string::npos;
+}
 
 int main() {
     Database database("salaha.db");
@@ -18,6 +23,7 @@ int main() {
     std::cout << "1 - Interactive (Terminal Based)" << std::endl << "2 - Program (File Based)" << std::endl;
     std::cout << "Select a mode: ";
     std::cin >> mode;
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
     if (mode == 1) {
         while (true) {
@@ -28,6 +34,10 @@ int main() {
                 break;
             }
 
+            if (isBlank(input)) {
+                continue;
+            }
+
             if (parser.parse(input, cmd)) {
                 database.execute(cmd);
             } else {
@@ -35,7 +45,7 @@ int main() {
             }
         }
     } 
-    
+
     else if (mode == 2) {
         std::ifstream file("code.txt");
 
@@ -45,6 +55,10 @@ int main() {
         }
 
         while (std::getline(file, input)) {
+            if (isBlank(input)) {
+                continue;
+            }
+
             std::cout << "> " << input << std::endl;
 
             if (parser.parse(input, cmd)) {
@@ -57,3 +71,4 @@ int main() {
 
     return 0;
 }
+

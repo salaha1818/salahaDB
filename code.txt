@@ -1,1 +1,18 @@
-update 7 salaha 19
+insert John 20
+insert Bob 20
+insert Alice 25
+
+select age 20
+select name John
+
+update 1 Johnny 30
+
+select age 20
+select age 30
+select name John
+select name Johnny
+
+delete 2
+
+select age 20
+select name Bob
