@@ -23,16 +23,20 @@ void Database::load(){
     records = storage.load();
     uint32_t largestID = 0;
     for (size_t i = 0; i < records.size(); i++) {
-        const Record& record = records[i];
+        Record& record = records[i];
 
         if (record.id > largestID) {
             largestID = record.id;
         }
-        indices[record.id] = i;
-        ages[record.age].push_back(record.id);
-        names[record.name].push_back(record.id);
+        reIndex(record, i);
     }
     nextID = largestID + 1;
+}
+
+void Database::reIndex(Record& record, int index) {
+    indices[record.id] = index;
+    ages[record.age].push_back(record.id);
+    names[record.name].push_back(record.id);
 }
 
 void Database::save(){
@@ -52,6 +56,8 @@ void Database::execute(const Command& cmd){
         find(cmd.arguments);
     } else if (cmd.type == "help") {
         help();
+    } else if (cmd.type == "compact") {
+        compact();
     } else {}
 }
 
@@ -274,6 +280,29 @@ void Database::updateRecord(const std::vector<std::string>& arguments) {
     } else {
         std::cout << "ID does not exist." << std::endl;
     }
+}
+
+void Database::compact () {
+    std::vector <Record> compactRecords;
+
+    for (const auto& record:records) {
+        if(!record.deleted) {
+            compactRecords.push_back(record);
+        }
+    }
+    records = std::move(compactRecords);
+
+    // rebuild the primary and secondary indexes
+    indices.clear();
+    ages.clear();
+    names.clear();
+
+    for (size_t i = 0; i < records.size(); i++){
+        Record& record = records[i];
+        reIndex(record, i);
+    }
+    save();
+    std::cout << "Database compacted." << std::endl;
 }
 
 int toInt(std::string value) {

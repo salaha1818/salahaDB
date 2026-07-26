@@ -18,6 +18,8 @@ private:
     void select(const std::vector<std::string>& arguments) const;
     void find(const std::vector<std::string>& arguments);
     void help() const;
+    void compact();
+    void reIndex(Record& record, int index);
     StorageEngine storage;
     void updateRecord(const std::vector<std::string>& arguments);
     void sortAge(std::vector <Record>& records) const;

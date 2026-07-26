@@ -1,18 +1,12 @@
 insert John 20
-insert Bob 20
-insert Alice 25
-
-select age 20
-select name John
-
-update 1 Johnny 30
-
-select age 20
-select age 30
-select name John
-select name Johnny
+insert Bob 21
+insert Alice 22
 
 delete 2
 
-select age 20
-select name Bob
+compact
+
+select
+find 2
+insert Charlie 23
+select
