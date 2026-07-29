@@ -3,6 +3,8 @@
 #include <vector>
 #include "Command.h"
 #include "Parser.h"
+#include "Page.h"
+#include "PageManager.h"
 #include "Database.h"
 #include <algorithm>
 #include <cctype>
@@ -16,31 +18,57 @@ Database::Database(const std::string& filename)
     load();
 }
 
-void Database::load(){
+void Database::load() {
     indices.clear();
     ages.clear();
     names.clear();
-    records = storage.load();
-    uint32_t largestID = 0;
-    for (size_t i = 0; i < records.size(); i++) {
-        Record& record = records[i];
+    pageManager.clear();
 
-        if (record.id > largestID) {
-            largestID = record.id;
+    // Load pages from disk and give them to PageManager
+    std::vector<Page> pages = storage.loadPages();
+    pageManager.loadPages(pages);
+
+    uint32_t largestID = 0;
+    bool hasRecords = false;
+
+    const std::vector<Page>& loadedPages = pageManager.getPages();
+
+    // Rebuild indexes from the loaded pages
+    for (size_t pageIndex = 0;
+         pageIndex < loadedPages.size();
+         pageIndex++) {
+
+        const std::vector<Record>& pageRecords =
+            loadedPages[pageIndex].getRecords();
+
+        for (size_t slotIndex = 0;
+             slotIndex < pageRecords.size();
+             slotIndex++) {
+
+            const Record& record = pageRecords[slotIndex];
+
+            reIndex(record, pageIndex, slotIndex);
+
+            if (record.id > largestID) {
+                largestID = record.id;
+            }
+
+            hasRecords = true;
         }
-        reIndex(record, i);
     }
-    nextID = largestID + 1;
+
+    nextID = hasRecords ? largestID + 1 : 1;
 }
 
-void Database::reIndex(Record& record, int index) {
-    indices[record.id] = index;
+void Database::reIndex(const Record& record, size_t pageIndex, size_t slotIndex) {
+    indices[record.id].pageIndex = pageIndex;
+    indices[record.id].slotIndex = slotIndex;
     ages[record.age].push_back(record.id);
     names[record.name].push_back(record.id);
 }
 
 void Database::save(){
-    storage.save(records);
+    storage.savePages(pageManager.getPages());
 }
 
 void Database::execute(const Command& cmd){
@@ -61,23 +89,97 @@ void Database::execute(const Command& cmd){
     } else {}
 }
 
-void Database::insert(const std::vector<std::string>& arguments){
-    if(arguments.size() != 2) return;
-    int age = toInt(arguments[1]);
-    if(age == -1) {
+void Database::help() const {
+    std::cout << "\n=========================== salahaDB Commands ===========================\n\n";
+
+    std::cout << "  insert <name> <age>         Insert a new record.\n";
+    std::cout << "  find <id>                   Find a record by ID.\n";
+    std::cout << "  update <id> <name> <age>    Update an existing record.\n";
+    std::cout << "  delete <id>                 Soft-delete a record.\n";
+    std::cout << "\n";
+
+    std::cout << "  select                      Display all active records.\n";
+    std::cout << "  select name <name>          Filter records by name.\n";
+    std::cout << "  select age <age>            Filter records by age.\n";
+    std::cout << "  select sort name            Sort records by name.\n";
+    std::cout << "  select sort age             Sort records by age.\n";
+    std::cout << "\n";
+
+    std::cout << "  compact                     Permanently remove deleted records.\n";
+    std::cout << "\n";
+
+    std::cout << "  help                        Show this help menu.\n";
+    std::cout << "  exit                        Save the database and exit.\n";
+    std::cout << "\n";
+    std::cout << "==========================================================================\n";
+}
+
+void Database::find(const std::vector<std::string>& arguments) {
+    // Check valid command
+    if (arguments.size() != 1) return;
+
+    int id = toInt(arguments[0]);
+
+    if (id == -1) {
         std::cout << "Invalid command." << std::endl;
         return;
     }
+
+    auto it = indices.find(id);
+
+    if (it == indices.end()) {
+        std::cout << "Record not found." << std::endl;
+        return;
+    }
+
+    const RecordLocation& location = it->second;
+
+    const Record& record =
+        pageManager.getPages()[location.pageIndex]
+                   .getRecords()[location.slotIndex];
+
+    if (record.deleted) {
+        std::cout << "ID has been deleted." << std::endl;
+        return;
+    }
+
+    printRecord(record);
+}
+
+void Database::insert(
+    const std::vector<std::string>& arguments
+) {
+    if (arguments.size() != 2)
+        return;
+
+    int age = toInt(arguments[1]);
+
+    if (age == -1) {
+        std::cout << "Invalid command.\n";
+        return;
+    }
+
     Record record;
     record.id = nextID;
     record.name = arguments[0];
     record.age = age;
-    records.push_back(record);
-    indices[record.id] = records.size() - 1;
-    ages[record.age].push_back(record.id);
-    names[record.name].push_back(record.id);
+    record.deleted = false;
+
+    int pageIndex;
+    int slotIndex;
+
+    if (!pageManager.insertRecord(record, pageIndex, slotIndex)) {
+        std::cout
+            << "Error: Record could not fit in a page.\n";
+        return;
+    }
+
+    reIndex(record, pageIndex, slotIndex);
+
     nextID++;
-    std::cout << "Record inserted." << std::endl;
+
+    std::cout << "Record inserted.\n";
+
     save();
 }
 
@@ -90,12 +192,19 @@ void Database::deleteRecord(const std::vector<std::string>& arguments){
     }
     // check if id exists and find matching record
     if (indices.count(targetId)) {
-        int index = indices[targetId];
-        if (!records[index].deleted) {
-            records[index].deleted = true;
-            removeIdFromAge(records[index].age, targetId);
-            removeIdFromName(records[index].name, targetId);
+        size_t pageIndex = indices[targetId].pageIndex;
+        size_t slotIndex = indices[targetId].slotIndex;
+
+        Record& record = pageManager.getPages()[pageIndex].getRecords()[slotIndex];
+
+        if (!record.deleted) {
+            record.deleted = true;
+
+            removeIdFromAge(record.age, targetId);
+            removeIdFromName(record.name, targetId);
+            
             save();
+
             std::cout << "Record deleted." << std::endl;
         } else {
             std::cout << "Record has already been deleted." << std::endl;
@@ -105,12 +214,17 @@ void Database::deleteRecord(const std::vector<std::string>& arguments){
     }
 }
 
-void Database::select(const std::vector<std::string>& arguments) const {
+void Database::select(
+    const std::vector<std::string>& arguments
+) const {
     bool found = false;
 
     // select
     if (arguments.empty()) {
-        for (const auto& record : records) {
+        std::vector<Record> allRecords =
+            pageManager.getAllRecords();
+
+        for (const Record& record : allRecords) {
             if (!record.deleted) {
                 printRecord(record);
                 found = true;
@@ -124,7 +238,6 @@ void Database::select(const std::vector<std::string>& arguments) const {
         return;
     }
 
-    // All current filters require exactly two arguments
     if (arguments.size() != 2) {
         std::cout << "Invalid command." << std::endl;
         return;
@@ -151,10 +264,17 @@ void Database::select(const std::vector<std::string>& arguments) const {
                     continue;
                 }
 
-                size_t index = indexIt->second;
+                const RecordLocation& location =
+                    indexIt->second;
 
-                if (!records[index].deleted) {
-                    printRecord(records[index]);
+                const Record& record =
+                    pageManager.getPages()
+                               [location.pageIndex]
+                               .getRecords()
+                               [location.slotIndex];
+
+                if (!record.deleted) {
+                    printRecord(record);
                     found = true;
                 }
             }
@@ -175,10 +295,17 @@ void Database::select(const std::vector<std::string>& arguments) const {
                     continue;
                 }
 
-                size_t index = indexIt->second;
+                const RecordLocation& location =
+                    indexIt->second;
 
-                if (!records[index].deleted) {
-                    printRecord(records[index]);
+                const Record& record =
+                    pageManager.getPages()
+                               [location.pageIndex]
+                               .getRecords()
+                               [location.slotIndex];
+
+                if (!record.deleted) {
+                    printRecord(record);
                     found = true;
                 }
             }
@@ -187,18 +314,23 @@ void Database::select(const std::vector<std::string>& arguments) const {
 
     // select sort <age|name>
     else if (arguments[0] == "sort") {
-        std::vector<Record> tempRecords = records;
+        std::vector<Record> tempRecords =
+            pageManager.getAllRecords();
 
         if (arguments[1] == "age") {
             sortAge(tempRecords);
-        } else if (arguments[1] == "name") {
+        }
+        else if (arguments[1] == "name") {
             sortName(tempRecords);
-        } else {
-            std::cout << "Invalid sorting category." << std::endl;
+        }
+        else {
+            std::cout
+                << "Invalid sorting category."
+                << std::endl;
             return;
         }
 
-        for (const auto& record : tempRecords) {
+        for (const Record& record : tempRecords) {
             if (!record.deleted) {
                 printRecord(record);
                 found = true;
@@ -218,61 +350,40 @@ void Database::select(const std::vector<std::string>& arguments) const {
     }
 
     if (!found) {
-        std::cout << "No matching records found." << std::endl;
-    }
-}
-
-void Database::help() const {
-    std::cout << "Available Commands:" << std::endl << "----------------------" << std::endl;
-    std::cout << "insert <name> <age>         Insert a new record." << std::endl;
-    std::cout << "select                      Display all active records." << std::endl;
-    std::cout << "update <id> <name> <age>    Update an existing record." << std::endl;
-    std::cout << "find <id>                   Find a record by ID." << std::endl;
-    std::cout << "delete <id>                 Soft delete a record." << std::endl;
-    std::cout << "help                        Display help menu." << std::endl;
-    std::cout << "exit                        Exit the program." << std::endl;
-}
-
-void Database::find(const std::vector<std::string>& arguments){
-    // check valid command
-    if(arguments.size() != 1) return;
-    int id = toInt(arguments[0]);
-    if(id == -1) {
-        std::cout << "Invalid command." << std::endl;
-        return;
-    }
-
-    // check if id exists and find matching record
-    if (indices.count(id)) {
-        int index = indices[id];
-        if (!records[index].deleted) {
-            printRecord(records[index]);
-        } else {
-            std::cout << "ID has been deleted." << std::endl;
-        }
-    } else {
-        std::cout << "ID does not exist." << std::endl;
+        std::cout
+            << "No matching records found."
+            << std::endl;
     }
 }
 
 void Database::updateRecord(const std::vector<std::string>& arguments) {
     if(arguments.size() != 3) return;
+
     int id = toInt(arguments[0]);
     int age = toInt(arguments[2]);
+
     if(id == -1 || age == -1){
         std::cout << "Invalid command." << std::endl;
         return;
     }
+
     if (indices.count(id)) {
-        size_t index = indices[id];
-        if (!records[index].deleted) {
-            removeIdFromAge(records[index].age, id);
-            removeIdFromName(records[index].name, id);
-            records[index].name = arguments[1];
-            records[index].age = age;
-            ages[records[index].age].push_back(id);
-            names[records[index].name].push_back(id);
+        size_t pageIndex = indices[id].pageIndex;
+        size_t slotIndex = indices[id].slotIndex;
+
+        Record& record = pageManager.getPages()[pageIndex].getRecords()[slotIndex];
+
+        if (!record.deleted) {
+            removeIdFromAge(record.age, id);
+            removeIdFromName(record.name, id);
+            
+            record.name = arguments[1];
+            record.age = age;
+            
+            reIndex(record, pageIndex, slotIndex);
+            
             save();
+            
             std::cout << "Record updated." << std::endl;
         } else {
             std::cout << "ID has been deleted." << std::endl;
@@ -282,39 +393,42 @@ void Database::updateRecord(const std::vector<std::string>& arguments) {
     }
 }
 
-void Database::compact () {
-    std::vector <Record> compactRecords;
+void Database::compact() {
+    pageManager.compact();
 
-    for (const auto& record:records) {
-        if(!record.deleted) {
-            compactRecords.push_back(record);
-        }
-    }
-    records = std::move(compactRecords);
-
-    // rebuild the primary and secondary indexes
     indices.clear();
     ages.clear();
     names.clear();
 
-    for (size_t i = 0; i < records.size(); i++){
-        Record& record = records[i];
-        reIndex(record, i);
+    const std::vector<Page>& pages = pageManager.getPages();
+    
+    for (size_t pageIndex  = 0; pageIndex  < pages.size(); pageIndex ++) {
+        const std::vector<Record>& records = pages[pageIndex ].getRecords();
+        for (size_t slotIndex = 0; slotIndex < records.size(); slotIndex ++) {
+            const Record& record = records[slotIndex];
+            reIndex(record, pageIndex , slotIndex);
+        }
     }
+
     save();
+
     std::cout << "Database compacted." << std::endl;
 }
 
-int toInt(std::string value) {
-    int num;
+int toInt(const std::string value) {
     try {
-        num = std::stoi(value);
-    } catch (...) {
+        size_t position;
+        int num = std::stoi(value, &position);
+
+        if (position != value.size() || num < 0) {
+            return -1;
+        }
+
+        return num;
+    }
+    catch (...) {
         return -1;
     }
-    if(num >= 0) {
-        return num;
-    } else return -1;
 }
 
 void Database::printRecord(const Record& record) const {
@@ -333,7 +447,7 @@ void Database::sortName(std::vector<Record>& records) const {
     std::sort(records.begin(), records.end(), [](const Record& a, const Record& b) {
         return std::lexicographical_compare(
             a.name.begin(), a.name.end(), b.name.begin(), b.name.end(),
-            [](char c1, char c2) { return std::tolower(c1) < std::tolower(c2); }
+            [](unsigned char c1, unsigned char c2) { return std::tolower(c1) < std::tolower(c2); }
         );
     });
 }
@@ -355,9 +469,9 @@ void Database::removeIdFromAge(int age, int id){
     }
 }
 
-void Database::removeIdFromName(std::string name, int id){
+void Database::removeIdFromName(std::string& name, int id){
     auto it = names.find(name);
-    if (it == names.end()) return;  // age not in map
+    if (it == names.end()) return;  // name not in map
 
     std::vector<int>& ids = it->second; // gets vector of ids
     

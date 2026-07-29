@@ -8,4 +8,9 @@ class Serializer
 public:
     std::string serialize(const Record& record);
     Record deserialize(const std::string& line);
+    static size_t getRecordSize(const Record& record);
+
+    static void serializeBinary(const Record& record, std::ostream& output);
+    static Record deserializeBinary(std::istream& input);
+
 };

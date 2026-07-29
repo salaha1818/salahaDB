@@ -1,12 +1,7 @@
 insert John 20
-insert Bob 21
-insert Alice 22
-
-delete 2
-
+insert Alice 25
+find 1
+update 2 Alice 30
+delete 1
 compact
-
-select
-find 2
-insert Charlie 23
-select
+exit

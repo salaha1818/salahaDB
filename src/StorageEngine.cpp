@@ -10,37 +10,81 @@ StorageEngine::StorageEngine(const std::string& filename)
     : filename(filename)
 {}
 
-// read code from file
-std::vector <Record> StorageEngine::load(){
-    Serializer serializer;
-    std::vector<Record> loaded;
-    std::ifstream file(filename);
+// read from file
+std::vector<Page> StorageEngine::loadPages() {
+    std::vector<Page> pages;
+    // reading a binary file
+    std::ifstream file(filename, std::ios::binary);
 
     // check if the file opened successfully
-    if (!file.is_open()) {
-        return loaded; // empty vector to avoid crashing
+    if (!file) {
+        return pages;
     }
 
-    // read the file line by line
-    std::string line;
-    while (std::getline(file, line)) {
-        Record record = serializer.deserialize(line);
-        loaded.push_back(record);
+    // go to end of file and store the size
+    file.seekg(0, std::ios::end);
+    std::streampos fileSize = file.tellg();
+
+    // go back to begining of new file
+    file.seekg(0, std::ios::beg);
+
+    // check if the file is a valid size (multiple of 4096)
+    if(fileSize % Page::maxSize != 0) {
+        std::cout
+            << "Error: Invalid database file size."
+            << std::endl;
+        return pages;
     }
-    return loaded;
+
+    // find the page number
+    uint32_t pageCount =
+        static_cast<uint32_t>(fileSize / Page::maxSize);
+
+    // deserialzie every page
+    for (uint32_t i = 0; i < pageCount; i++) {
+        Page page =
+            Page::deserialize(file);
+
+        if (!file) {
+            std::cout
+                << "Error: Could not load page."
+                << std::endl;
+
+            break;
+        }
+
+        pages.push_back(page);
+    }
+
+    return pages;
 }
 
-// save info in database
-void StorageEngine::save(const std::vector<Record>& records) {
-    Serializer serializer;
-    std::ofstream file(filename);
+// write to file
+void StorageEngine::savePages(
+    const std::vector<Page>& pages
+) {
+    std::ofstream file(
+        filename,
+        std::ios::binary | std::ios::trunc
+    );
 
-    if (!file.is_open()) {
-        std::cout << "Error: Could not open the file!" << std::endl;
+    if (!file) {
+        std::cout
+            << "Error: Could not open file."
+            << std::endl;
+
         return;
     }
 
-    for (const Record& record : records) {
-        file << serializer.serialize(record) << '\n';
+    for (const Page& page : pages) {
+        page.serialize(file);
+
+        if (!file) {
+            std::cout
+                << "Error: Could not save page."
+                << std::endl;
+
+            return;
+        }
     }
 }
