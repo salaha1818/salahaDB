@@ -20,6 +20,7 @@ private:
     void find(const std::vector<std::string>& arguments);
     void help() const;
     void compact();
+    void stats() const;
     void reIndex(const Record& record, size_t pageIndex, size_t slotIndex);
     StorageEngine storage;
     void updateRecord(const std::vector<std::string>& arguments);

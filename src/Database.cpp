@@ -86,7 +86,44 @@ void Database::execute(const Command& cmd){
         help();
     } else if (cmd.type == "compact") {
         compact();
+    } else if (cmd.type == "stats") {
+        stats();
     } else {}
+}
+
+void Database::stats() const {
+    size_t totalRecordCount = 0;
+    size_t activeRecordCount = 0;
+    size_t deletedRecordCount = 0;
+    size_t pageCount = 0;
+    
+    const std::vector <Page>& pages = pageManager.getPages();
+    pageCount = pages.size();
+
+    size_t databaseSize = sizeof(StorageEngine::DatabaseHeader) + pageCount * Page::maxSize;
+
+    for(const auto& page:pages) {
+        const std::vector<Record>& records = page.getRecords();
+        for(const auto& record:records) {
+            if (record.deleted) {
+                deletedRecordCount++;
+            } else {
+                activeRecordCount++;
+            }
+            totalRecordCount++;
+        }
+    }
+
+    std::cout
+        << "\n=============== salahaDB Statistics =================\n\n"
+        << "Total Records:   " << totalRecordCount << '\n'
+        << "Active Records:  " << activeRecordCount << '\n'
+        << "Deleted Records: " << deletedRecordCount << "\n\n"
+        << "Pages:           " << pageCount << '\n'
+        << "Page Size:       " << Page::maxSize << " bytes\n"
+        << "Database Size:   " << databaseSize << " bytes\n\n"
+        << "=====================================================\n"
+        << std::endl;
 }
 
 void Database::help() const {
