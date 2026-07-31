@@ -19,7 +19,7 @@ public:
     Page(uint32_t id);
 
     bool canFit(const Record& record) const;
-    bool addRecord(const Record& record, int& slotIndex);
+    bool addRecord(const Record& record, size_t& slotIndex);
 
     uint32_t getUsedSize() const;
     uint32_t getMaxSize() const;

@@ -12,7 +12,7 @@ class PageManager {
     public:
         PageManager();
         void clear();
-        bool insertRecord (const Record & record, int& pageIndex, int& slotIndex);
+        bool insertRecord (const Record & record, size_t& pageIndex, size_t& slotIndex);
         const Page& getPage (size_t id) const;
         std::vector<Page>& getPages();
         const std::vector<Page>& getPages() const;

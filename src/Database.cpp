@@ -64,14 +64,15 @@ void Database::load() {
 }
 
 void Database::reIndex(const Record& record, size_t pageIndex, size_t slotIndex) {
+    if (record.deleted) {
+        return;
+    }
+
     RecordLocation location{pageIndex, slotIndex};
 
     primaryIndex.insert(record.id, location);
-
-    if (!record.deleted) {
-        ages[record.age].push_back(record.id);
-        names[record.name].push_back(record.id);
-    }
+    ages[record.age].push_back(record.id);
+    names[record.name].push_back(record.id);
 }
 
 void Database::save(){
@@ -207,8 +208,8 @@ void Database::insert(
     record.age = age;
     record.deleted = false;
 
-    int pageIndex;
-    int slotIndex;
+    size_t pageIndex;
+    size_t slotIndex;
 
     if (!pageManager.insertRecord(record, pageIndex, slotIndex)) {
         std::cout
@@ -228,20 +229,17 @@ void Database::insert(
 void Database::deleteRecord(
     const std::vector<std::string>& arguments
 ) {
-    if (arguments.size() != 1)
-        return;
-
-    int id = toInt(arguments[0]);
-
-    if (id == -1) {
+    if (arguments.size() != 1) {
         std::cout << "Invalid command.\n";
         return;
     }
 
-    auto location = primaryIndex.search(id);
+    int id = std::stoi(arguments[0]);
+
+    std::optional<RecordLocation> location = primaryIndex.search(id);
 
     if (!location.has_value()) {
-        std::cout << "ID does not exist.\n";
+        std::cout << "Record not found.\n";
         return;
     }
 
@@ -252,15 +250,10 @@ void Database::deleteRecord(
         pageManager.getPages()[pageIndex]
                    .getRecords()[slotIndex];
 
-    if (record.deleted) {
-        std::cout << "Record has already been deleted.\n";
-        return;
-    }
-
-    record.deleted = true;
-
+    primaryIndex.remove(id);
     removeIdFromAge(record.age, id);
     removeIdFromName(record.name, id);
+    record.deleted = true;
 
     save();
 

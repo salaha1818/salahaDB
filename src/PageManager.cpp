@@ -18,7 +18,7 @@ void PageManager::clear() {
     newPage();
 }
 
-bool PageManager::insertRecord (const Record & record, int& pageIndex, int& slotIndex){
+bool PageManager::insertRecord (const Record & record, size_t& pageIndex, size_t& slotIndex){
     for(int i = 0; i < pages.size(); i++) {
         if(pages[i].addRecord(record, slotIndex)){
             pageIndex = i;
@@ -76,8 +76,8 @@ void PageManager::compact() {
     pages.clear();
 
     for (const Record& record : activeRecords) {
-        int pageIndex;
-        int slotIndex;
+        size_t pageIndex;
+        size_t slotIndex;
 
         insertRecord(record, pageIndex, slotIndex);
     }

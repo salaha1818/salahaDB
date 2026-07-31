@@ -48,7 +48,34 @@ public:
     void insertIntoParent(Node* left, int separatorKey, Node* right);
     void splitInternal(Node* node);
     static constexpr size_t MAX_KEYS = 4;
+    static constexpr size_t MIN_KEYS = 2;
     void clear();
+
+    // deletion functions
+    bool remove(int key);
+    size_t findChildIndex(const Node* parent, const Node* child) const;
+    size_t minLeafKeys() const;
+    size_t minInternalKeys() const;
+    bool hasMinimumKeys(const Node* node) const;
+    void updateParentSeparator(Node* node);
+    Node* getLeftSibling(Node* node) const;
+    Node* getRightSibling(Node* node) const;
+    bool canBorrowFrom(const Node* sibling) const;
+
+    bool borrowFromLeftLeaf(Node* node, Node* leftSibling);
+    bool borrowFromRightLeaf(Node* node, Node* rightSibling);
+    bool borrowFromLeftInternal(Node* node, Node* leftSibling);
+    bool borrowFromRightInternal(Node* node, Node* rightSibling);
+
+    bool mergeLeafWithLeft(Node* node, Node* leftSibling);
+    bool mergeLeafWithRight(Node* node, Node* rightSibling);
+    bool mergeInternalWithLeft(Node* node, Node* leftSibling);
+    bool mergeInternalWithRight(Node* node, Node* rightSibling);
+
+    void rebalance(Node* node);
+
+    void printTree() const;
+    void printLevel(const std::vector<Node*>& level) const;
 
 private:
     void deleteTree(Node* node);

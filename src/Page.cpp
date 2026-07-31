@@ -14,7 +14,7 @@ bool Page::canFit (const Record & record) const {
     return usedSize + Serializer::getRecordSize(record) <= maxSize;
 }
 
-bool Page::addRecord(const Record & record, int& slotIndex) {
+bool Page::addRecord(const Record & record, size_t& slotIndex) {
     if(!canFit(record)){
         return false;
     }
@@ -139,7 +139,7 @@ Page Page::deserialize(std::istream& input) {
     uint32_t loadedPageID;
     uint32_t loadedUsedSize;
     uint32_t recordCount;
-    int slotIndex = 0;
+    size_t slotIndex = 0;
 
     // read page header info
     input.read(
