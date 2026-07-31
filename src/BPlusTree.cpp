@@ -182,3 +182,8 @@ void BPlusTree::insertIntoParent(Node* left, int separatorKey, Node* right) {
         splitInternal(parent);
     }
 }
+
+void BPlusTree::clear() {
+    deleteTree(root);
+    root = new Node(true);
+}

@@ -50,43 +50,88 @@ const std::vector<Record>& Page::getRecords() const {
     return records;
 }
 
+// update page space used when updating record
+bool Page::updateRecord(
+    size_t slotIndex,
+    const Record& updatedRecord
+) {
+    if (slotIndex >= records.size()) {
+        return false;
+    }
+
+    size_t oldRecordSize = Serializer::getRecordSize(records[slotIndex]);
+
+    size_t newRecordSize = Serializer::getRecordSize(updatedRecord);
+
+    size_t newUsedSize = usedSize - oldRecordSize + newRecordSize;
+
+    if (newUsedSize > maxSize) {
+        return false;
+    }
+
+    records[slotIndex] = updatedRecord;
+    usedSize = static_cast<uint32_t>(newUsedSize);
+
+    return true;
+}
+
 void Page::serialize(std::ostream& output) const {
+    std::streampos pageStart = output.tellp();
+
     uint32_t recordCount =
         static_cast<uint32_t>(records.size());
-    
-    // write page id
+
     output.write(
         reinterpret_cast<const char*>(&pageID),
         sizeof(pageID)
     );
 
-    // write num of bytes used
     output.write(
         reinterpret_cast<const char*>(&usedSize),
         sizeof(usedSize)
     );
 
-    // write record count
     output.write(
         reinterpret_cast<const char*>(&recordCount),
         sizeof(recordCount)
     );
 
-    for(const auto& record:records) {
+    for (const auto& record : records) {
         Serializer::serializeBinary(record, output);
     }
 
-    // write 0's in the empty space
-    uint32_t paddingSize = maxSize - usedSize;
+    if (!output) {
+        return;
+    }
+
+    std::streampos currentPosition = output.tellp();
+
+    std::streamoff bytesWritten =
+        currentPosition - pageStart;
+
+    if (bytesWritten >
+        static_cast<std::streamoff>(maxSize)) {
+
+        std::cerr
+            << "Error: Serialized page exceeds maximum size."
+            << std::endl;
+
+        output.setstate(std::ios::failbit);
+        return;
+    }
+
+    std::streamoff paddingSize =
+        static_cast<std::streamoff>(maxSize) -
+        bytesWritten;
 
     std::vector<char> padding(
-        paddingSize,
+        static_cast<size_t>(paddingSize),
         0
     );
 
     output.write(
         padding.data(),
-        padding.size()
+        static_cast<std::streamsize>(padding.size())
     );
 }
 
@@ -94,7 +139,7 @@ Page Page::deserialize(std::istream& input) {
     uint32_t loadedPageID;
     uint32_t loadedUsedSize;
     uint32_t recordCount;
-    int slotIndex;
+    int slotIndex = 0;
 
     // read page header info
     input.read(
@@ -166,7 +211,7 @@ Page Page::deserialize(std::istream& input) {
     uint32_t paddingSize =
         page.getMaxSize() - loadedUsedSize;
 
-    input.ignore(paddingSize);
+    input.ignore(static_cast<std::streamsize>(paddingSize));
 
     return page;
 }

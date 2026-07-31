@@ -1,3 +1,5 @@
+#define BPLUSTREE_H
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -8,7 +10,8 @@
 #include "Database.h"
 #include <algorithm>
 #include <cctype>
-
+#include <unordered_map>
+#include <optional>
 
 int toInt(std::string value);
 
@@ -19,7 +22,7 @@ Database::Database(const std::string& filename)
 }
 
 void Database::load() {
-    indices.clear();
+    primaryIndex.clear();
     ages.clear();
     names.clear();
     pageManager.clear();
@@ -61,10 +64,14 @@ void Database::load() {
 }
 
 void Database::reIndex(const Record& record, size_t pageIndex, size_t slotIndex) {
-    indices[record.id].pageIndex = pageIndex;
-    indices[record.id].slotIndex = slotIndex;
-    ages[record.age].push_back(record.id);
-    names[record.name].push_back(record.id);
+    RecordLocation location{pageIndex, slotIndex};
+
+    primaryIndex.insert(record.id, location);
+
+    if (!record.deleted) {
+        ages[record.age].push_back(record.id);
+        names[record.name].push_back(record.id);
+    }
 }
 
 void Database::save(){
@@ -162,18 +169,16 @@ void Database::find(const std::vector<std::string>& arguments) {
         return;
     }
 
-    auto it = indices.find(id);
+    auto location = primaryIndex.search(id);
 
-    if (it == indices.end()) {
+   if (!location.has_value()) {
         std::cout << "Record not found." << std::endl;
         return;
     }
 
-    const RecordLocation& location = it->second;
-
     const Record& record =
-        pageManager.getPages()[location.pageIndex]
-                   .getRecords()[location.slotIndex];
+        pageManager.getPages()[location->pageIndex]
+                   .getRecords()[location->slotIndex];
 
     if (record.deleted) {
         std::cout << "ID has been deleted." << std::endl;
@@ -220,35 +225,46 @@ void Database::insert(
     save();
 }
 
-void Database::deleteRecord(const std::vector<std::string>& arguments){
-    if(arguments.size() != 1) return;
-    int targetId = toInt(arguments[0]);
-    if(targetId == -1){
-        std::cout << "Invalid command." << std::endl;
+void Database::deleteRecord(
+    const std::vector<std::string>& arguments
+) {
+    if (arguments.size() != 1)
+        return;
+
+    int id = toInt(arguments[0]);
+
+    if (id == -1) {
+        std::cout << "Invalid command.\n";
         return;
     }
-    // check if id exists and find matching record
-    if (indices.count(targetId)) {
-        size_t pageIndex = indices[targetId].pageIndex;
-        size_t slotIndex = indices[targetId].slotIndex;
 
-        Record& record = pageManager.getPages()[pageIndex].getRecords()[slotIndex];
+    auto location = primaryIndex.search(id);
 
-        if (!record.deleted) {
-            record.deleted = true;
-
-            removeIdFromAge(record.age, targetId);
-            removeIdFromName(record.name, targetId);
-            
-            save();
-
-            std::cout << "Record deleted." << std::endl;
-        } else {
-            std::cout << "Record has already been deleted." << std::endl;
-        }
-    } else {
-        std::cout << "ID does not exist." << std::endl;
+    if (!location.has_value()) {
+        std::cout << "ID does not exist.\n";
+        return;
     }
+
+    size_t pageIndex = location->pageIndex;
+    size_t slotIndex = location->slotIndex;
+
+    Record& record =
+        pageManager.getPages()[pageIndex]
+                   .getRecords()[slotIndex];
+
+    if (record.deleted) {
+        std::cout << "Record has already been deleted.\n";
+        return;
+    }
+
+    record.deleted = true;
+
+    removeIdFromAge(record.age, id);
+    removeIdFromName(record.name, id);
+
+    save();
+
+    std::cout << "Record deleted.\n";
 }
 
 void Database::select(
@@ -295,20 +311,17 @@ void Database::select(
             const std::vector<int>& ids = ageIt->second;
 
             for (int id : ids) {
-                auto indexIt = indices.find(id);
+                auto location = primaryIndex.search(id);
 
-                if (indexIt == indices.end()) {
+                if (!location.has_value()) {
                     continue;
                 }
 
-                const RecordLocation& location =
-                    indexIt->second;
-
                 const Record& record =
                     pageManager.getPages()
-                               [location.pageIndex]
+                               [location->pageIndex]
                                .getRecords()
-                               [location.slotIndex];
+                               [location->slotIndex];
 
                 if (!record.deleted) {
                     printRecord(record);
@@ -326,20 +339,17 @@ void Database::select(
             const std::vector<int>& ids = nameIt->second;
 
             for (int id : ids) {
-                auto indexIt = indices.find(id);
+                auto location = primaryIndex.search(id);
 
-                if (indexIt == indices.end()) {
+                if (!location.has_value()) {
                     continue;
                 }
 
-                const RecordLocation& location =
-                    indexIt->second;
-
                 const Record& record =
                     pageManager.getPages()
-                               [location.pageIndex]
+                               [location->pageIndex]
                                .getRecords()
-                               [location.slotIndex];
+                               [location->slotIndex];
 
                 if (!record.deleted) {
                     printRecord(record);
@@ -394,46 +404,71 @@ void Database::select(
 }
 
 void Database::updateRecord(const std::vector<std::string>& arguments) {
-    if(arguments.size() != 3) return;
+    if (arguments.size() != 3)
+        return;
 
     int id = toInt(arguments[0]);
     int age = toInt(arguments[2]);
 
-    if(id == -1 || age == -1){
+    if (id == -1 || age == -1) {
         std::cout << "Invalid command." << std::endl;
         return;
     }
 
-    if (indices.count(id)) {
-        size_t pageIndex = indices[id].pageIndex;
-        size_t slotIndex = indices[id].slotIndex;
+    auto location = primaryIndex.search(id);
 
-        Record& record = pageManager.getPages()[pageIndex].getRecords()[slotIndex];
-
-        if (!record.deleted) {
-            removeIdFromAge(record.age, id);
-            removeIdFromName(record.name, id);
-            
-            record.name = arguments[1];
-            record.age = age;
-            
-            reIndex(record, pageIndex, slotIndex);
-            
-            save();
-            
-            std::cout << "Record updated." << std::endl;
-        } else {
-            std::cout << "ID has been deleted." << std::endl;
-        }
-    } else {
+    if (!location.has_value()) {
         std::cout << "ID does not exist." << std::endl;
+        return;
     }
+
+    size_t pageIndex = location->pageIndex;
+    size_t slotIndex = location->slotIndex;
+
+    Record& record =
+        pageManager.getPages()[pageIndex]
+                   .getRecords()[slotIndex];
+
+    if (record.deleted) {
+        std::cout << "ID has been deleted." << std::endl;
+        return;
+    }
+
+    std::string oldName = record.name;
+    int oldAge = record.age;
+
+    Record updatedRecord = record;
+    updatedRecord.name = arguments[1];
+    updatedRecord.age = age;
+
+    if (!pageManager.getPages()[pageIndex].updateRecord(
+            slotIndex,
+            updatedRecord
+        )) {
+        std::cout
+            << "Error: Updated record does not fit in page."
+            << std::endl;
+        return;
+    }
+
+    removeIdFromAge(oldAge, id);
+    removeIdFromName(oldName, id);
+
+    ages[updatedRecord.age].push_back(id);
+    names[updatedRecord.name].push_back(id);
+
+    ages[updatedRecord.age].push_back(updatedRecord.id);
+    names[updatedRecord.name].push_back(updatedRecord.id);
+
+    save();
+
+    std::cout << "Record updated." << std::endl;
 }
 
 void Database::compact() {
     pageManager.compact();
 
-    indices.clear();
+    primaryIndex.clear();
     ages.clear();
     names.clear();
 

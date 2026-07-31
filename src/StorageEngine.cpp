@@ -84,7 +84,7 @@ std::vector<Page> StorageEngine::loadPages() {
         )) {
 
         std::cout
-            << "Error: Invalid database file size."
+            << "Error: Invalid database header size."
             << std::endl;
 
         std::exit(EXIT_FAILURE);

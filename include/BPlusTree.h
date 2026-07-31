@@ -1,9 +1,10 @@
+#pragma once
 #define BPLUSTREE_H
 
 #include <vector>
 #include <optional>
 #include "PageManager.h"
-#include "Database.h"
+#include "RecordLocation.h"
 
 class BPlusTree {
 private:
@@ -47,6 +48,7 @@ public:
     void insertIntoParent(Node* left, int separatorKey, Node* right);
     void splitInternal(Node* node);
     static constexpr size_t MAX_KEYS = 4;
+    void clear();
 
 private:
     void deleteTree(Node* node);

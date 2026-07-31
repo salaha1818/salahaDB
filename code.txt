@@ -1,7 +1,9 @@
-insert John 20
-insert Alice 25
 find 1
-update 2 Alice 30
-delete 1
+find 2
+select age 35
+select name SarahUpdated
+select
 compact
+find 2
+select
 exit

@@ -8,12 +8,9 @@
 #include "Record.h"
 #include "Command.h"
 #include "PageManager.h"
+#include "BPlusTree.h"
 #include <unordered_map>
-
-struct RecordLocation {
-        size_t pageIndex;
-        size_t slotIndex;
-};
+#include "RecordLocation.h"
 
 class Database {
 private:
@@ -34,7 +31,7 @@ private:
     void printRecord(const Record& record) const;
     void removeIdFromAge(int age, int id);
     void removeIdFromName(std::string& name, int id);
-    std::unordered_map<int, RecordLocation> indices;
+    BPlusTree primaryIndex;
     std::unordered_map<std::string, std::vector<int>> names;
     std::unordered_map<int, std::vector<int>> ages;
 public:

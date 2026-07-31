@@ -31,4 +31,5 @@ public:
 
     void serialize(std::ostream& output) const;
     static Page deserialize(std::istream& input);
+    bool updateRecord(size_t slotIndex, const Record& updatedRecord);
 };
