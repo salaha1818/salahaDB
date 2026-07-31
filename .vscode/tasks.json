@@ -16,6 +16,7 @@
                 "src/Serializer.cpp",
                 "src/Page.cpp",
                 "src/PageManager.cpp",
+                "src/BPlusTree.cpp",
                 "-o",
                 "SalahaDB.exe"
             ],

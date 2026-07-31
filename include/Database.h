@@ -10,6 +10,11 @@
 #include "PageManager.h"
 #include <unordered_map>
 
+struct RecordLocation {
+        size_t pageIndex;
+        size_t slotIndex;
+};
+
 class Database {
 private:
     uint32_t nextID = 1;
@@ -29,10 +34,6 @@ private:
     void printRecord(const Record& record) const;
     void removeIdFromAge(int age, int id);
     void removeIdFromName(std::string& name, int id);
-    struct RecordLocation {
-        size_t pageIndex;
-        size_t slotIndex;
-    };
     std::unordered_map<int, RecordLocation> indices;
     std::unordered_map<std::string, std::vector<int>> names;
     std::unordered_map<int, std::vector<int>> ages;
