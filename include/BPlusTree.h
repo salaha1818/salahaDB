@@ -77,6 +77,8 @@ public:
     void printTree() const;
     void printLevel(const std::vector<Node*>& level) const;
 
+    std::vector<RecordLocation> rangeSearch(int minKey, int maxKey) const;
+
 private:
     void deleteTree(Node* node);
 };

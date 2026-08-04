@@ -1,13 +1,12 @@
-insert John 20
-insert Alice 25
-delete 1
+insert A 20
+insert B 21
+insert C 22
+insert D 23
+insert E 24
+insert F 25
+select id 2 5
+select id 1 6
+select id 3 3
+select id 20 30
+select id 6 2
 exit
-
-(restart)
-
-find 1
-find 2
-select
-compact
-find 1
-find 2

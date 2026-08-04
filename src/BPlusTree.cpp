@@ -581,3 +581,26 @@ void BPlusTree::printTree() const {
         std::cout << '\n';
     }
 }
+
+std::vector<RecordLocation> BPlusTree::rangeSearch(int minKey, int maxKey) const {
+    std::vector <RecordLocation> result;
+    if(minKey>maxKey) return result;
+
+    Node* currentLeaf = findLeaf(minKey);
+
+    while(currentLeaf != nullptr){
+        for(size_t i = 0; i < currentLeaf->keys.size(); i++) {
+            int key = currentLeaf->keys[i];
+
+            if (key > maxKey) {
+                return result;
+            }
+
+            if (key >= minKey) {
+                result.push_back(currentLeaf->values[i]);
+            }
+        }
+        currentLeaf = currentLeaf->nextLeaf;
+    }
+    return result;
+}

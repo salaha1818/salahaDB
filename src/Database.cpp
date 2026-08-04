@@ -278,14 +278,52 @@ void Database::select(
         }
 
         if (!found) {
-            std::cout << "No records found." << std::endl;
+            std::cout << "No records found.\n";
+        }
+
+        return;
+    }
+
+    // select id <minID> <maxID>
+    if (arguments[0] == "id") {
+        if (arguments.size() != 3) {
+            std::cout << "Invalid command.\n";
+            return;
+        }
+
+        int minID = toInt(arguments[1]);
+        int maxID = toInt(arguments[2]);
+
+        if (minID == -1 || maxID == -1) {
+            std::cout << "Invalid command.\n";
+            return;
+        }
+
+        std::vector<RecordLocation> range =
+            primaryIndex.rangeSearch(minID, maxID);
+
+        for (const RecordLocation& location : range) {
+            const Record& record =
+                pageManager.getPages()
+                           [location.pageIndex]
+                           .getRecords()
+                           [location.slotIndex];
+
+            if (!record.deleted) {
+                printRecord(record);
+                found = true;
+            }
+        }
+
+        if (!found) {
+            std::cout << "No matching records found.\n";
         }
 
         return;
     }
 
     if (arguments.size() != 2) {
-        std::cout << "Invalid command." << std::endl;
+        std::cout << "Invalid command.\n";
         return;
     }
 
@@ -294,7 +332,7 @@ void Database::select(
         int age = toInt(arguments[1]);
 
         if (age == -1) {
-            std::cout << "Invalid command." << std::endl;
+            std::cout << "Invalid command.\n";
             return;
         }
 
@@ -364,9 +402,7 @@ void Database::select(
             sortName(tempRecords);
         }
         else {
-            std::cout
-                << "Invalid sorting category."
-                << std::endl;
+            std::cout << "Invalid sorting category.\n";
             return;
         }
 
@@ -378,21 +414,19 @@ void Database::select(
         }
 
         if (!found) {
-            std::cout << "No records found." << std::endl;
+            std::cout << "No records found.\n";
         }
 
         return;
     }
 
     else {
-        std::cout << "Invalid filter." << std::endl;
+        std::cout << "Invalid filter.\n";
         return;
     }
 
     if (!found) {
-        std::cout
-            << "No matching records found."
-            << std::endl;
+        std::cout << "No matching records found.\n";
     }
 }
 
