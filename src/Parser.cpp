@@ -2,26 +2,236 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <algorithm>
 #include "Command.h"
 #include "Parser.h"
+#include <cctype>
+
+std::string upperCase(std::string s) {
+    for (char& c : s) {
+        c = std::toupper(static_cast<unsigned char>(c));
+    }
+    return s;
+}
+
+std::string lowerCase(std::string s) {
+    for (char& c : s) {
+        c = std::tolower(static_cast<unsigned char>(c));
+    }
+    return s;
+}
 
 bool Parser::parse(std::string input, Command& cmd) {
     cmd = {};
-    bool valid = false;
-    std::string type;
-    std::vector<std::string> arguments;
+
+    std::vector<std::string> tokens;
     std::istringstream iss(input);
     std::string token;
 
-    iss >> type;
     while (iss >> token) {
-        arguments.push_back(token);
+        tokens.push_back(token);
     }
 
-    if((type == "update" && arguments.size() == 3) || (type == "insert" && arguments.size() == 2) || (type == "delete" && arguments.size() == 1) || ((type == "select" || type == "help" || type == "exit") && arguments.size() == 0) || (type == "select" && (arguments.size() == 0 || arguments.size() == 2 || arguments.size() == 3)) || (type == "find" && arguments.size() == 1) || type == "compact" || type == "stats"){
-        valid = true;
-        cmd.type = type;
-        cmd.arguments = arguments;
+    if (tokens.empty()) {
+        return false;
     }
-    return valid;
+
+    std::string commandType = upperCase(tokens[0]);
+
+    if (commandType == "SELECT") {
+        return parseSelect(tokens, cmd);
+    }
+
+    if (commandType == "INSERT") {
+        return parseInsert(tokens, cmd);
+    }
+
+    if (commandType == "UPDATE") {
+        return parseUpdate(tokens, cmd);
+    }
+
+    if (commandType == "DELETE") {
+        return parseDelete(tokens, cmd);
+    }
+
+    // FIND <id>
+    if (commandType == "FIND") {
+        if (tokens.size() != 2) {
+            return false;
+        }
+
+        cmd.type = "find";
+        cmd.arguments = {tokens[1]};
+        return true;
+    }
+
+    // Commands with no arguments
+    if (commandType == "COMPACT" ||
+        commandType == "STATS" ||
+        commandType == "HELP" ||
+        commandType == "EXIT") {
+
+        if (tokens.size() != 1) {
+            return false;
+        }
+
+        cmd.type = lowerCase(tokens[0]);
+        cmd.arguments.clear();
+        return true;
+    }
+
+    return false;
+}
+
+bool Parser::parseInsert(const std::vector<std::string>& tokens, Command& cmd) {
+    if (tokens.size() != 6) {
+        return false;
+    }
+
+    if (upperCase(tokens[0]) != "INSERT" ||
+        upperCase(tokens[1]) != "INTO" ||
+        lowerCase(tokens[2]) != "records" ||
+        upperCase(tokens[3]) != "VALUES") {
+
+        return false;
+    }
+
+    cmd.type = "insert";
+    cmd.arguments = {tokens[4], tokens[5]};
+
+    return true;
+}
+
+bool Parser::parseSelect(
+    const std::vector<std::string>& tokens,
+    Command& cmd
+) {
+    if (tokens.size() < 4) {
+        return false;
+    }
+
+    if (upperCase(tokens[0]) != "SELECT" ||
+        tokens[1] != "*" ||
+        upperCase(tokens[2]) != "FROM" ||
+        lowerCase(tokens[3]) != "records") {
+        return false;
+    }
+
+    cmd.type = "select";
+
+    // SELECT * FROM records
+    if (tokens.size() == 4) {
+        cmd.arguments.clear();
+        return true;
+    }
+
+    // SELECT * FROM records ORDER BY age|name
+    if (tokens.size() == 7 &&
+        upperCase(tokens[4]) == "ORDER" &&
+        upperCase(tokens[5]) == "BY") {
+
+        std::string category = lowerCase(tokens[6]);
+
+        if (category == "age" ||
+            category == "name") {
+
+            cmd.arguments = {
+                "sort",
+                category
+            };
+
+            return true;
+        }
+    }
+
+    // SELECT * FROM records WHERE age|name = value
+    if (tokens.size() == 8 &&
+        upperCase(tokens[4]) == "WHERE" &&
+        tokens[6] == "=") {
+
+        std::string category =
+            lowerCase(tokens[5]);
+
+        if (category == "age" ||
+            category == "name") {
+
+            cmd.arguments = {
+                category,
+                tokens[7]
+            };
+
+            return true;
+        }
+    }
+
+    // SELECT * FROM records WHERE id BETWEEN min AND max
+    if (tokens.size() == 10 &&
+        upperCase(tokens[4]) == "WHERE" &&
+        lowerCase(tokens[5]) == "id" &&
+        upperCase(tokens[6]) == "BETWEEN" &&
+        upperCase(tokens[8]) == "AND") {
+
+        cmd.arguments = {
+            "id",
+            tokens[7],
+            tokens[9]
+        };
+
+        return true;
+    }
+
+    return false;
+}
+
+bool Parser::parseUpdate(
+    const std::vector<std::string>& tokens,
+    Command& cmd
+) {
+    if (tokens.size() != 13) {
+        return false;
+    }
+
+    if (upperCase(tokens[0]) != "UPDATE" ||
+        lowerCase(tokens[1]) != "records" ||
+        upperCase(tokens[2]) != "SET" ||
+        lowerCase(tokens[3]) != "name" ||
+        tokens[4] != "=" ||
+        lowerCase(tokens[6]) != "age" ||
+        tokens[7] != "=" ||
+        upperCase(tokens[9]) != "WHERE" ||
+        lowerCase(tokens[10]) != "id" ||
+        tokens[11] != "=") {
+
+        return false;
+    }
+
+    cmd.type = "update";
+    cmd.arguments = {
+        tokens[12], // ID
+        tokens[5],  // new name
+        tokens[8]   // new age
+    };
+
+    return true;
+}
+
+bool Parser::parseDelete(const std::vector<std::string>& tokens, Command& cmd) {
+    if (tokens.size() != 7) {
+        return false;
+    }
+
+    if (upperCase(tokens[0]) != "DELETE" ||
+        upperCase(tokens[1]) != "FROM" ||
+        lowerCase(tokens[2]) != "records" ||
+        upperCase(tokens[3]) != "WHERE" ||
+        lowerCase(tokens[4]) != "id" ||
+        tokens[5] != "=") {
+
+        return false;
+    }
+
+    cmd.type = "delete";
+    cmd.arguments = {tokens[6]};
+
+    return true;
 }

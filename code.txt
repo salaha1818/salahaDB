@@ -1,12 +1,21 @@
-insert A 20
-insert B 21
-insert C 22
-insert D 23
-insert E 24
-insert F 25
-select id 2 5
-select id 1 6
-select id 3 3
-select id 20 30
-select id 6 2
-exit
+INSERT INTO records VALUES John 20
+INSERT INTO records VALUES Sarah 30
+INSERT INTO records VALUES Alex 20
+
+SELECT * FROM records
+SELECT * FROM records WHERE age = 20
+SELECT * FROM records WHERE name = Sarah
+SELECT * FROM records WHERE id BETWEEN 1 AND 3
+SELECT * FROM records ORDER BY age
+SELECT * FROM records ORDER BY name
+
+UPDATE records SET name = SarahUpdated age = 35 WHERE id = 2
+FIND 2
+
+DELETE FROM records WHERE id = 1
+FIND 1
+
+STATS
+COMPACT
+SELECT * FROM records
+EXIT
