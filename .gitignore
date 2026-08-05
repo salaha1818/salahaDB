@@ -1,0 +1,23 @@
+# Working files
+salaha.db
+code.txt
+
+# Build output
+build/
+*.exe
+
+# VS Code
+.vscode/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Object files
+*.o
+*.obj
+
+# Windows
+*.pdb
