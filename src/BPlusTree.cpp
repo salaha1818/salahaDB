@@ -10,8 +10,7 @@
 #include <queue>
 #include <iostream>
 
-
-
+// searches the correct leaf for the given key
 std::optional<RecordLocation> BPlusTree::search(int key) const {   
     Node* leaf = findLeaf(key);
     const std::vector<int>& keys = leaf->keys;
@@ -23,6 +22,7 @@ std::optional<RecordLocation> BPlusTree::search(int key) const {
     return std::nullopt;
 }
 
+// inserts the key in sorted order inside its leaf
 void BPlusTree::insert(int key, const RecordLocation& location) {
     Node* leaf = findLeaf(key);
     std::vector<int>& keys = leaf->keys;
@@ -45,6 +45,7 @@ void BPlusTree::insert(int key, const RecordLocation& location) {
     }
 }
 
+// recursively deletes the tree from the bottom up
 void BPlusTree::deleteTree(Node* node) {
     if (node == nullptr) {
         return;
@@ -57,6 +58,7 @@ void BPlusTree::deleteTree(Node* node) {
     delete node;
 }
 
+// follows separator keys until the correct leaf is reached
 BPlusTree::Node* BPlusTree::findLeaf(int key) const {
     Node* node = root;
 
@@ -74,16 +76,17 @@ BPlusTree::Node* BPlusTree::findLeaf(int key) const {
     return node;
 }
 
+// splits an overflowing leaf into two linked leaves
 void BPlusTree::splitLeaf(Node* leaf) {
     Node* newLeaf = new Node(true);
     size_t splitIndex = leaf->keys.size() / 2;
     std::vector<int>& keys = leaf->keys;
     std::vector<RecordLocation>& values = leaf->values;
 
-    // seperate higher keys 
+    // separate the higher keys
     newLeaf->keys.assign(keys.begin() + splitIndex, keys.end());
 
-    // seperate higher values 
+    // separate the higher values
     newLeaf->values.assign(values.begin() + splitIndex, values.end());
 
     // erase the copied values
@@ -100,7 +103,7 @@ void BPlusTree::splitLeaf(Node* leaf) {
     // find where the right leaf begins
     int separatorKey = newLeaf->keys[0];
 
-    // if we start at root, need to create a internal node
+    // if this is the root, create a new internal root
     if (leaf == root) {
         Node* newRoot = new Node(false);
 
@@ -119,19 +122,20 @@ void BPlusTree::splitLeaf(Node* leaf) {
     }
 }
 
+// splits an overflowing internal node and moves one key upward
 void BPlusTree::splitInternal(Node* node) {
     Node* newInternal = new Node(false);
     size_t splitIndex = node->keys.size() / 2;
     std::vector<int>& keys = node->keys;
     std::vector <Node*>& children = node -> children;
     
-    // find which the key to move to parent
+    // find the key that moves up to the parent
     int separatorKey = node->keys[splitIndex];
 
-    // seperate higher keys 
+    // separate the higher keys
     newInternal->keys.assign(keys.begin() + splitIndex + 1, keys.end());
 
-    // seperate higher children 
+    // separate the higher children
     newInternal->children.assign(children.begin() + splitIndex + 1, children.end());
 
     // update parent for children
@@ -146,7 +150,7 @@ void BPlusTree::splitInternal(Node* node) {
     // connect internal node to the same parent as the node
     newInternal->parent = node->parent;
 
-    // if we start at root, need to create a internal node
+    // if this is the root, create a new internal root
     if (node == root) {
         Node* newRoot = new Node(false);
 
@@ -165,6 +169,7 @@ void BPlusTree::splitInternal(Node* node) {
     }
 }
 
+// inserts a separator and right child into the parent
 void BPlusTree::insertIntoParent(Node* left, int separatorKey, Node* right) {
     Node* parent = left -> parent;
     std::vector<int>& keys = parent->keys;
@@ -177,7 +182,7 @@ void BPlusTree::insertIntoParent(Node* left, int separatorKey, Node* right) {
     }
 
     // insert new key and a new child to hold additional range
-    // node with n keys had n+1 children
+    // a node with n keys has n + 1 children
     keys.insert(keys.begin() + index, separatorKey);
     children.insert(children.begin() + index + 1, right);
 
@@ -188,18 +193,20 @@ void BPlusTree::insertIntoParent(Node* left, int separatorKey, Node* right) {
     }
 }
 
+// removes all nodes and creates a new empty tree
 void BPlusTree::clear() {
     deleteTree(root);
     root = new Node(true);
 }
 
+// removes a key from its leaf and fixes any underflow
 bool BPlusTree::remove(int key) {
     Node* leaf = findLeaf(key);
 
     // find index of key 
     auto it = std::find(leaf->keys.begin(), leaf->keys.end(), key);
 
-    // if invalid return
+    // return if the key does not exist
     if (it == leaf->keys.end() || *it != key) {
         return false;
     }
@@ -208,7 +215,7 @@ bool BPlusTree::remove(int key) {
         it - leaf->keys.begin()
     );
 
-    // erase old keys and values
+    // remove the key and its record location
     leaf->keys.erase(leaf->keys.begin() + index);
     leaf->values.erase(leaf->values.begin() + index);
 
@@ -220,7 +227,7 @@ bool BPlusTree::remove(int key) {
 }
 
 size_t BPlusTree::findChildIndex(const Node* parent, const Node* child) const {
-    for(size_t i = 0; i < parent -> children.size(); i++){
+    for (size_t i = 0; i < parent -> children.size(); i++){
         if(parent -> children[i] == child) {
             return i; 
         }
@@ -228,7 +235,7 @@ size_t BPlusTree::findChildIndex(const Node* parent, const Node* child) const {
     throw std::runtime_error("Child was not found in its parent.");
 }
 
-// seperate incase ! change it later
+// kept separate in case leaf and internal minimums change later
 size_t BPlusTree::minLeafKeys() const {
     return MIN_KEYS;
 }
@@ -333,16 +340,16 @@ bool BPlusTree::borrowFromLeftInternal(Node* node, Node* leftSibling){
         Node* parent = node -> parent;
         size_t index = findChildIndex(parent, node);
 
-        // parent seperator goes to front of node keys
+        // parent separator goes to the front of the node keys
         int seperator = parent ->keys[index-1];
         node->keys.insert(node->keys.begin(), seperator);
 
-        // left sibling last child goes to front of node keys
+        // left sibling last child goes to the front of the node children
         Node* movedChild = leftSibling->children.back();
         node->children.insert(node->children.begin(), movedChild);
         movedChild -> parent = node;
 
-        // left sibling last key becomes parent seperator
+        // left sibling last key becomes the parent separator
         parent->keys[index - 1] = leftSibling->keys.back();
 
         // remove the borrowed key and child
@@ -358,7 +365,7 @@ bool BPlusTree::borrowFromRightInternal(Node* node, Node* rightSibling) {
         Node* parent = node -> parent;
         size_t index = findChildIndex(parent, node);
 
-        // parent seperator goes to end of node keys
+        // parent separator goes to the end of the node keys
         int seperator = parent ->keys[index];
         node->keys.push_back(seperator);
 
@@ -367,7 +374,7 @@ bool BPlusTree::borrowFromRightInternal(Node* node, Node* rightSibling) {
         node->children.push_back(movedChild);
         movedChild -> parent = node;
 
-        // right sibling first key becomes parent seperator
+        // right sibling first key becomes the parent separator
         parent->keys[index] = rightSibling->keys.front();
 
         // remove the borrowed key and child
@@ -414,7 +421,7 @@ bool BPlusTree::mergeLeafWithRight(Node* node, Node* rightSibling) {
     // remove right sibling from the leaf linked list
     node->nextLeaf = rightSibling->nextLeaf;
 
-    // remove the seperator at index
+    // remove the separator at this index
     parent->keys.erase(parent->keys.begin() + index);
 
     // remove the node's child pointer from the parent
@@ -442,7 +449,7 @@ bool BPlusTree::mergeInternalWithLeft(Node* node, Node* leftSibling) {
         child->parent = leftSibling;
     }
 
-    // remove separator from parents
+    // remove the separator from the parent
     parent->keys.erase(parent->keys.begin() + index - 1);
 
     // remove the node's child pointer from the parent
@@ -480,6 +487,7 @@ bool BPlusTree::mergeInternalWithRight(Node* node, Node* rightSibling) {
     return true;
 }
 
+// borrows from a sibling or merges when a node has too few keys
 void BPlusTree::rebalance(Node* node) {
     // root case
     if (node == root) {
@@ -525,15 +533,15 @@ void BPlusTree::rebalance(Node* node) {
     // nobody could lend, so merge
     if (node->isLeaf) {
         if (leftSibling != nullptr) {
-            merged =mergeLeafWithLeft(node, leftSibling);
+            merged = mergeLeafWithLeft(node, leftSibling);
         } else if (rightSibling != nullptr) {
-            merged =mergeLeafWithRight(node, rightSibling);
+            merged = mergeLeafWithRight(node, rightSibling);
         }
     } else {
         if (leftSibling != nullptr) {
-            merged =mergeInternalWithLeft(node, leftSibling);
+            merged = mergeInternalWithLeft(node, leftSibling);
         } else if (rightSibling != nullptr) {
-            merged =mergeInternalWithRight(node, rightSibling);
+            merged = mergeInternalWithRight(node, rightSibling);
         }
     }
 
@@ -543,53 +551,15 @@ void BPlusTree::rebalance(Node* node) {
     }
 }
 
-void BPlusTree::printTree() const {
-    if (root == nullptr) {
-        std::cout << "Tree is empty.\n";
-        return;
-    }
-
-    std::queue<Node*> nodes;
-    nodes.push(root);
-
-    while (!nodes.empty()) {
-        size_t levelSize = nodes.size();
-
-        for (size_t i = 0; i < levelSize; i++) {
-            Node* current = nodes.front();
-            nodes.pop();
-
-            std::cout << "[";
-
-            for (size_t j = 0; j < current->keys.size(); j++) {
-                std::cout << current->keys[j];
-
-                if (j + 1 < current->keys.size()) {
-                    std::cout << " ";
-                }
-            }
-
-            std::cout << "] ";
-
-            if (!current->isLeaf) {
-                for (Node* child : current->children) {
-                    nodes.push(child);
-                }
-            }
-        }
-
-        std::cout << '\n';
-    }
-}
-
+// moves across linked leaves and collects values inside the range
 std::vector<RecordLocation> BPlusTree::rangeSearch(int minKey, int maxKey) const {
     std::vector <RecordLocation> result;
-    if(minKey>maxKey) return result;
+    if (minKey > maxKey) return result;
 
     Node* currentLeaf = findLeaf(minKey);
 
-    while(currentLeaf != nullptr){
-        for(size_t i = 0; i < currentLeaf->keys.size(); i++) {
+    while (currentLeaf != nullptr){
+        for (size_t i = 0; i < currentLeaf->keys.size(); i++) {
             int key = currentLeaf->keys[i];
 
             if (key > maxKey) {

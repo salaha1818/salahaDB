@@ -7,6 +7,7 @@
 #include "Parser.h"
 #include <cctype>
 
+// converts a string to uppercase so SQL keywords are case-insensitive
 std::string upperCase(std::string s) {
     for (char& c : s) {
         c = std::toupper(static_cast<unsigned char>(c));
@@ -14,6 +15,7 @@ std::string upperCase(std::string s) {
     return s;
 }
 
+// converts a string to lowercase for comparisons
 std::string lowerCase(std::string s) {
     for (char& c : s) {
         c = std::tolower(static_cast<unsigned char>(c));
@@ -22,12 +24,14 @@ std::string lowerCase(std::string s) {
 }
 
 bool Parser::parse(std::string input, Command& cmd) {
+    // clear the previous command
     cmd = {};
 
     std::vector<std::string> tokens;
     std::istringstream iss(input);
     std::string token;
 
+    // split the input into tokens
     while (iss >> token) {
         tokens.push_back(token);
     }
@@ -36,6 +40,7 @@ bool Parser::parse(std::string input, Command& cmd) {
         return false;
     }
 
+    // use the first token to determine the command type
     std::string commandType = upperCase(tokens[0]);
 
     if (commandType == "SELECT") {
@@ -65,8 +70,12 @@ bool Parser::parse(std::string input, Command& cmd) {
         return true;
     }
 
-    // Commands with no arguments
-    if (commandType == "COMPACT" ||
+    if (commandType == "DROP") {
+        return parseDrop(tokens, cmd);
+    }
+
+    // commands with no arguments
+    if (commandType == "VACUUM" ||
         commandType == "STATS" ||
         commandType == "HELP" ||
         commandType == "EXIT") {
@@ -84,6 +93,7 @@ bool Parser::parse(std::string input, Command& cmd) {
 }
 
 bool Parser::parseInsert(const std::vector<std::string>& tokens, Command& cmd) {
+    // INSERT INTO records VALUES <name> <age>
     if (tokens.size() != 6) {
         return false;
     }
@@ -96,6 +106,7 @@ bool Parser::parseInsert(const std::vector<std::string>& tokens, Command& cmd) {
         return false;
     }
 
+    // insert expects: name, age
     cmd.type = "insert";
     cmd.arguments = {tokens[4], tokens[5]};
 
@@ -110,6 +121,7 @@ bool Parser::parseSelect(
         return false;
     }
 
+    // every select starts with SELECT * FROM records
     if (upperCase(tokens[0]) != "SELECT" ||
         tokens[1] != "*" ||
         upperCase(tokens[2]) != "FROM" ||
@@ -135,6 +147,7 @@ bool Parser::parseSelect(
         if (category == "age" ||
             category == "name") {
 
+            // select expects: sort, category
             cmd.arguments = {
                 "sort",
                 category
@@ -155,6 +168,7 @@ bool Parser::parseSelect(
         if (category == "age" ||
             category == "name") {
 
+            // select expects: category, value
             cmd.arguments = {
                 category,
                 tokens[7]
@@ -171,6 +185,7 @@ bool Parser::parseSelect(
         upperCase(tokens[6]) == "BETWEEN" &&
         upperCase(tokens[8]) == "AND") {
 
+        // select expects: id, min, max
         cmd.arguments = {
             "id",
             tokens[7],
@@ -187,6 +202,7 @@ bool Parser::parseUpdate(
     const std::vector<std::string>& tokens,
     Command& cmd
 ) {
+    // UPDATE records SET name = <name> age = <age> WHERE id = <id>
     if (tokens.size() != 13) {
         return false;
     }
@@ -205,6 +221,7 @@ bool Parser::parseUpdate(
         return false;
     }
 
+    // update expects: id, new name, new age
     cmd.type = "update";
     cmd.arguments = {
         tokens[12], // ID
@@ -216,6 +233,7 @@ bool Parser::parseUpdate(
 }
 
 bool Parser::parseDelete(const std::vector<std::string>& tokens, Command& cmd) {
+    // DELETE FROM records WHERE id = <id>
     if (tokens.size() != 7) {
         return false;
     }
@@ -230,8 +248,26 @@ bool Parser::parseDelete(const std::vector<std::string>& tokens, Command& cmd) {
         return false;
     }
 
+    // delete expects: id
     cmd.type = "delete";
     cmd.arguments = {tokens[6]};
 
+    return true;
+}
+
+bool Parser::parseDrop(const std::vector<std::string>& tokens, Command& cmd) {
+    // DROP DATABASE CONFIRM
+    if (tokens.size() != 3) {
+        return false;
+    }
+
+    // require CONFIRM so the database isn't dropped by accident
+    if (upperCase(tokens[0]) != "DROP" ||
+        upperCase(tokens[1]) != "DATABASE" ||
+        upperCase(tokens[2]) != "CONFIRM") {
+        return false;
+    }
+
+    cmd.type = "drop";
     return true;
 }

@@ -1,21 +1,38 @@
-INSERT INTO records VALUES John 20
-INSERT INTO records VALUES Sarah 30
-INSERT INTO records VALUES Alex 20
+DROP DATABASE CONFIRM
+
+INSERT INTO records VALUES Alice 22
+INSERT INTO records VALUES Bob 31
+INSERT INTO records VALUES Charlie 27
+INSERT INTO records VALUES Alice 40
 
 SELECT * FROM records
-SELECT * FROM records WHERE age = 20
-SELECT * FROM records WHERE name = Sarah
-SELECT * FROM records WHERE id BETWEEN 1 AND 3
-SELECT * FROM records ORDER BY age
-SELECT * FROM records ORDER BY name
 
-UPDATE records SET name = SarahUpdated age = 35 WHERE id = 2
 FIND 2
 
-DELETE FROM records WHERE id = 1
-FIND 1
+SELECT * FROM records WHERE name = Alice
+
+SELECT * FROM records WHERE age = 27
+
+SELECT * FROM records WHERE id BETWEEN 2 AND 4
+
+SELECT * FROM records ORDER BY name
+
+SELECT * FROM records ORDER BY age
+
+UPDATE records SET name = Robert age = 32 WHERE id = 2
+
+FIND 2
+
+DELETE FROM records WHERE id = 3
+
+SELECT * FROM records
 
 STATS
-COMPACT
-SELECT * FROM records
+
+VACUUM
+
+STATS
+
+HELP
+
 EXIT

@@ -50,6 +50,7 @@
         "list": "cpp",
         "unordered_map": "cpp",
         "xhash": "cpp",
-        "optional": "cpp"
+        "optional": "cpp",
+        "deque": "cpp"
     }
 }
