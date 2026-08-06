@@ -115,12 +115,6 @@ Secondary indexes store record IDs. These IDs are then resolved through the B+ T
 INSERT INTO records VALUES <name> <age>
 ```
 
-Example:
-
-```sql
-INSERT INTO records VALUES Alice 22
-```
-
 ---
 
 ## Select Records
@@ -169,12 +163,6 @@ SELECT * FROM records ORDER BY age
 UPDATE records SET name = <name> age = <age> WHERE id = <id>
 ```
 
-Example:
-
-```sql
-UPDATE records SET name = Alicia age = 23 WHERE id = 1
-```
-
 ---
 
 ## Delete Records
@@ -191,12 +179,6 @@ Records are initially soft-deleted and remain in the database file until `VACUUM
 
 ```text
 FIND <id>
-```
-
-Example:
-
-```text
-FIND 1
 ```
 
 The `FIND` command uses the B+ Tree primary index to locate a record by its ID.
