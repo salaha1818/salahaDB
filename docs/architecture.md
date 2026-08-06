@@ -1,192 +1,86 @@
 # salahaDB Architecture
 
-Version: Current  
-Language: C++20  
-Storage: Custom Binary File Format  
-Author: Salaha Mukhtar
+**Version:** Current
+**Language:** C++20
+**Storage:** Custom Binary File Format
+**Author:** Salaha Mukhtar
 
 ---
 
 # 1. Project Overview
 
-## Introduction
+salahaDB is a lightweight database engine implemented from scratch in C++20. It was created to explore how database systems manage command parsing, records, pages, indexes, serialization, and persistent storage without relying on an existing database library such as SQLite.
 
-salahaDB is a lightweight relational database engine implemented entirely in C++. The project was built from scratch to explore how modern database systems work internally rather than relying on an existing database library such as SQLite.
+The project prioritizes correctness, modularity, maintainability, and educational value over production-level optimization.
 
-The primary objective of the project was to understand the core components of a database engine by implementing them manually. This includes command parsing, binary storage, page management, indexing, record serialization, and persistent storage.
+## Core Features
 
-Although salahaDB is intentionally much smaller than production database systems, its architecture follows many of the same ideas used by commercial database engines.
+* SQL-inspired command parser
+* Persistent binary storage
+* Fixed-size 4096-byte pages
+* B+ Tree primary index
+* Hash-based secondary indexes
+* Binary serialization and deserialization
+* Variable-length record names
+* Soft deletion
+* Database compaction with `VACUUM`
+* Interactive and script execution modes
+* Database statistics
+* File validation and corruption detection
 
-Current features include:
+## High-Level Architecture
 
-- SQL-like command parser
-- Persistent binary storage
-- Fixed-size page management
-- B+ Tree primary index
-- Secondary hash indexes
-- Binary serialization
-- Soft deletion
-- Database compaction (VACUUM)
-- Interactive command mode
-- Script execution mode
-- Database statistics
-- Corruption detection during loading
-
----
-
-# Project Goals
-
-The project was designed with the following goals:
-
-- Learn how databases organize data internally.
-- Separate responsibilities across independent classes.
-- Store data in a binary file rather than plain text.
-- Implement indexing to avoid linear searches.
-- Simulate page-based storage used by real database systems.
-- Keep the implementation readable and modular.
-- Build a project suitable for demonstrating systems programming skills during software engineering interviews.
-
-Performance was considered throughout the implementation, but correctness, maintainability, and educational value were prioritized over aggressive optimization.
-
----
-
-# High-Level Architecture
-
-Every command follows the same general execution path.
-
-```
+```text
                 User
                   │
                   ▼
-             main.cpp
+              main.cpp
                   │
                   ▼
-               Parser
+                Parser
                   │
                   ▼
-              Command
+               Command
                   │
                   ▼
-             Database
-      ┌─────────┼──────────┐
-      ▼         ▼          ▼
- PageManager  B+ Tree  Hash Indexes
-      │
-      ▼
-    Pages
-      │
-      ▼
- Serializer
-      │
-      ▼
+               Database
+       ┌──────────┼───────────┐
+       ▼          ▼           ▼
+ PageManager   BPlusTree   Hash Indexes
+       │
+       ▼
+      Pages
+       │
+       ▼
+   Serializer
+       │
+       ▼
  StorageEngine
-      │
-      ▼
-   salaha.db
+       │
+       ▼
+    salaha.db
 ```
 
-Each component has a single responsibility.
+Each component has one primary responsibility:
 
-- `main.cpp` handles user interaction.
-- `Parser` validates SQL-like commands.
-- `Database` coordinates all operations.
-- `PageManager` manages memory pages.
-- `Page` stores records.
-- `Serializer` converts records to binary.
-- `StorageEngine` reads and writes the database file.
-- `BPlusTree` provides fast primary-key lookups.
-- Secondary hash indexes accelerate searches by name and age.
-
-Keeping each component independent makes the system easier to understand, test, and extend.
-
----
-
-# Overall Command Flow
-
-Regardless of the command being executed, salahaDB follows the same high-level workflow.
-
-For example, the command
-
-```
-INSERT INTO records VALUES Alice 22
-```
-
-passes through the following stages:
-
-```
-User Input
-      │
-      ▼
-main.cpp
-      │
-      ▼
-Parser
-      │
-      ▼
-Command Object
-      │
-      ▼
-Database::execute()
-      │
-      ▼
-Database::insert()
-      │
-      ▼
-PageManager
-      │
-      ▼
-Page
-      │
-      ▼
-Update Indexes
-      │
-      ▼
-StorageEngine
-      │
-      ▼
-salaha.db
-```
-
-The parser is responsible only for validating syntax.
-
-The database is responsible for executing commands.
-
-The storage engine is responsible only for persistence.
-
-Each class performs one clearly defined task, reducing coupling between different parts of the project.
-
----
-
-# Major Components
-
-salahaDB consists of ten primary components.
-
-| Component | Responsibility |
-|-----------|----------------|
-| Record | Represents one database row |
-| Command | Represents one validated command |
-| Parser | Parses and validates SQL-like input |
-| Database | Coordinates all database operations |
-| Page | Stores records inside fixed-size pages |
-| PageManager | Manages all pages in memory |
-| Serializer | Converts records to and from binary format |
-| StorageEngine | Reads and writes database pages to disk |
-| BPlusTree | Primary index used for ID lookups |
-| RecordLocation | Stores a record's page and slot location |
-
-Each component is discussed in detail in later sections.
+* `main.cpp` handles user interaction and execution modes.
+* `Parser` validates SQL-inspired input.
+* `Command` stores validated command information.
+* `Database` coordinates database operations.
+* `PageManager` manages pages in memory.
+* `Page` stores records inside fixed-size blocks.
+* `Serializer` converts records to and from binary data.
+* `StorageEngine` reads and writes the database file.
+* `BPlusTree` provides primary-key and range lookups.
+* Secondary hash indexes accelerate searches by name and age.
 
 ---
 
 # 2. Core Data Structures
 
-The entire database is built around a small number of data structures. Each one has a single responsibility and is used throughout the system.
-
----
-
 ## Record
 
-The `Record` structure represents one row stored in the database.
+A `Record` represents one row in the database.
 
 ```cpp
 struct Record {
@@ -197,36 +91,18 @@ struct Record {
 };
 ```
 
-### Fields
+| Field     | Purpose                                      |
+| --------- | -------------------------------------------- |
+| `id`      | Unique identifier assigned by the database   |
+| `name`    | User-provided variable-length name           |
+| `age`     | User-provided age                            |
+| `deleted` | Indicates whether the record is soft-deleted |
 
-| Field | Purpose |
-|--------|---------|
-| id | Unique identifier assigned automatically by the database |
-| name | User-provided name |
-| age | User-provided age |
-| deleted | Indicates whether the record has been soft deleted |
-
-### Design Decisions
-
-The `Record` structure only stores data. It intentionally contains no parsing, serialization, or storage logic.
-
-Keeping the record as a plain data object makes it reusable throughout the project. Different components can manipulate records without depending on one another.
-
-For example:
-
-- The Parser never modifies records.
-- The Serializer converts records into bytes.
-- The Page stores records.
-- The Database updates records.
-- The StorageEngine writes serialized records to disk.
-
-This separation follows the Single Responsibility Principle.
-
----
+`Record` only stores data. Parsing, indexing, serialization, and persistence are handled by other components.
 
 ## Command
 
-The `Command` structure represents a validated SQL-like command produced by the parser.
+A `Command` represents validated user input.
 
 ```cpp
 struct Command {
@@ -235,44 +111,24 @@ struct Command {
 };
 ```
 
-### Fields
+For example:
 
-| Field | Purpose |
-|--------|---------|
-| type | Name of the command (insert, select, update, etc.) |
-| arguments | Parsed command arguments |
-
-### Example
-
-User input
-
-```
+```sql
 UPDATE records SET name = Alice age = 22 WHERE id = 5
 ```
 
-becomes
+is converted into a command containing:
 
-```
+```text
 type = "update"
-
-arguments
-
-5
-Alice
-22
+arguments = ["5", "Alice", "22"]
 ```
 
-The Database class never receives raw user input.
-
-Instead, it always receives a validated `Command` object from the Parser.
-
-This separates syntax validation from command execution.
-
----
+The `Database` receives validated `Command` objects rather than raw input.
 
 ## RecordLocation
 
-The `RecordLocation` structure stores where a record exists inside the database.
+A `RecordLocation` identifies where a record is stored.
 
 ```cpp
 struct RecordLocation {
@@ -281,38 +137,21 @@ struct RecordLocation {
 };
 ```
 
-Instead of storing pointers to records, the B+ Tree stores `RecordLocation` objects.
+The primary index stores record locations instead of pointers or duplicate record objects.
 
-This makes every record accessible using two numbers:
-
-- Page number
-- Slot number
-
-Example
-
-```
-Record ID 37
-
-↓
-
+```text
+Record ID
+    ↓
+B+ Tree
+    ↓
 RecordLocation
-
-pageIndex = 4
-
-slotIndex = 8
-
-↓
-
-Page 4
-
-↓
-
-Record 8
+    ↓
+Page and Slot
+    ↓
+Record
 ```
 
-Using locations instead of pointers avoids dangling references after pages are reloaded from disk.
-
----
+Using page and slot indexes avoids dangling pointers when pages are reloaded or rebuilt.
 
 ## DatabaseHeader
 
@@ -326,580 +165,124 @@ struct DatabaseHeader {
 };
 ```
 
-### Fields
+The header allows the `StorageEngine` to validate:
 
-| Field | Purpose |
-|--------|---------|
-| magic | Identifies the file as a salahaDB database |
-| version | Database format version |
-| pageSize | Size of every page stored in the file |
+* Magic number
+* Database version
+* Page size
+* Overall file size
 
-The header allows salahaDB to detect corrupted or incompatible database files before loading any pages.
-
-During startup, the StorageEngine verifies:
-
-- Magic number
-- Version
-- Page size
-- File size
-
-If any validation fails, the database exits with an error instead of attempting to load corrupted data.
+Invalid or incompatible database files are rejected before their pages are loaded.
 
 ---
 
-## Relationship Between Data Structures
+# 3. Class Responsibilities
 
-The fundamental objects relate to one another as follows:
+| Component        | Responsibility                                   |
+| ---------------- | ------------------------------------------------ |
+| `Record`         | Stores one database row                          |
+| `Command`        | Stores one validated command                     |
+| `Parser`         | Parses and validates SQL-inspired input          |
+| `Database`       | Executes commands and coordinates all subsystems |
+| `Page`           | Stores records inside one 4096-byte block        |
+| `PageManager`    | Creates, retrieves, and compacts pages           |
+| `Serializer`     | Converts records to and from binary data         |
+| `StorageEngine`  | Reads, writes, and validates database files      |
+| `BPlusTree`      | Maps record IDs to record locations              |
+| `RecordLocation` | Identifies a record's page and slot              |
 
-```
-User Input
-      │
-      ▼
- Command
-      │
-      ▼
- Database
-      │
-      ▼
-  Record
-      │
-      ▼
-Serializer
-      │
-      ▼
-Binary File
-```
+## Parser
 
-For indexed lookups:
+The `Parser`:
 
-```
-Record ID
+* Tokenizes user input
+* Validates command syntax
+* Rejects malformed commands
+* Produces `Command` objects
+* Handles commands case-insensitively
 
-↓
+It does not access records, pages, indexes, or storage.
 
-B+ Tree
+## Database
 
-↓
+The `Database` is the central coordinator. It handles:
 
-RecordLocation
+* `INSERT`
+* `SELECT`
+* `UPDATE`
+* `DELETE`
+* `FIND`
+* `VACUUM`
+* `DROP DATABASE CONFIRM`
+* `STATS`
+* `HELP`
+* `EXIT`
 
-↓
+It also manages record IDs, updates indexes, coordinates page operations, and saves changes.
 
-Page
+The next record ID is determined during startup:
 
-↓
-
-Record
-```
-
-These simple structures form the foundation for every higher-level component in salahaDB.
-
-# 3. Class Architecture
-
-salahaDB follows a modular architecture in which each class has a single, well-defined responsibility.
-
-Instead of allowing every class to communicate directly with one another, each component performs one task and exposes a simple interface to the rest of the system.
-
-This separation keeps the project easier to understand, debug, and extend.
-
-The following diagram shows how the major classes interact.
-
-```
-                     main.cpp
-                         │
-                         ▼
-                      Parser
-                         │
-                         ▼
-                     Command
-                         │
-                         ▼
-                     Database
-        ┌────────────┼──────────────┐
-        ▼            ▼              ▼
-   PageManager    BPlusTree   Secondary Indexes
-        │
-        ▼
-      Pages
-        │
-        ▼
-   Serializer
-        │
-        ▼
- StorageEngine
-        │
-        ▼
-     salaha.db
+```text
+nextID = largest existing ID + 1
 ```
 
-The following sections describe each class individually.
+## PageManager
+
+The `PageManager` owns all pages loaded into memory. It:
+
+* Creates new pages
+* Searches for available page space
+* Inserts records
+* Retrieves pages and records
+* Rebuilds pages during `VACUUM`
+
+If no existing page can fit a record, it creates a new page.
+
+## StorageEngine
+
+The `StorageEngine` is the only component that directly opens the database file. It:
+
+* Loads the database header
+* Validates the file
+* Loads and saves pages
+* Writes page padding
+* Reports file read and write failures
+
+This keeps file I/O separate from command execution and record management.
 
 ---
-
-# Record
-
-## Purpose
-
-The `Record` structure represents one row stored inside the database.
-
-Every record consists of four fields:
-
-- ID
-- Name
-- Age
-- Deleted flag
-
-The Record structure is intentionally simple and only stores data.
-
-It contains no parsing logic, storage logic, or indexing logic.
-
-Keeping Record independent allows it to be reused throughout the entire project.
-
----
-
-## Responsibilities
-
-The Record structure is responsible for storing:
-
-- the record ID
-- the user's name
-- the user's age
-- whether the record has been deleted
-
-Nothing else.
-
----
-
-## Used By
-
-Record objects are used throughout the project.
-
-```
-Parser
-     ×
-
-Database
-     ✓
-
-Page
-     ✓
-
-Serializer
-     ✓
-
-StorageEngine
-     ✓
-```
-
-The Parser never creates Record objects.
-
-Instead, it creates Command objects.
-
-The Database creates and modifies Records.
-
----
-
-## Why separate Record from Storage?
-
-A Record represents data.
-
-The StorageEngine represents persistence.
-
-Keeping them separate means the storage format can change without modifying the Record class.
-
-For example:
-
-```
-Record
-
-↓
-
-Serializer
-
-↓
-
-Binary Bytes
-
-↓
-
-StorageEngine
-```
-
-This follows the Single Responsibility Principle.
-
----
-
-# Command
-
-## Purpose
-
-The Command structure represents one validated SQL-like command.
-
-Instead of passing raw strings through the program, the Parser converts every command into a Command object.
-
----
-
-## Responsibilities
-
-A Command stores
-
-- command type
-- command arguments
-
-For example,
-
-```
-UPDATE records SET name = Alice age = 22 WHERE id = 5
-```
-
-becomes
-
-```
-type
-
-update
-
-arguments
-
-5
-Alice
-22
-```
-
-The Database only works with Command objects.
-
-It never parses user input itself.
-
----
-
-## Why use Command objects?
-
-Using Command objects separates parsing from execution.
-
-Instead of writing code like
-
-```
-if(input == ...)
-```
-
-throughout the project, the Parser performs all syntax validation first.
-
-Once a Command reaches the Database, it is already known to have valid syntax.
-
-This greatly simplifies the Database implementation.
-
----
-
-# Parser
-
-## Purpose
-
-The Parser converts raw user input into validated Command objects.
-
-It acts as the first stage of the database pipeline.
-
-```
-User Input
-
-↓
-
-Parser
-
-↓
-
-Command
-```
-
----
-
-## Responsibilities
-
-The Parser
-
-- tokenizes input
-- validates SQL-like syntax
-- rejects malformed commands
-- converts commands into Command objects
-
-The Parser does **not**
-
-- modify records
-- access pages
-- access indexes
-- access storage
-
----
-
-## Supported Commands
-
-The parser currently recognizes
-
-- INSERT
-- SELECT
-- UPDATE
-- DELETE
-- FIND
-- VACUUM
-- DROP DATABASE CONFIRM
-- HELP
-- STATS
-- EXIT
-
-The parser is also case-insensitive, allowing commands such as
-
-```
-insert
-
-INSERT
-
-InSeRt
-```
-
-to be treated identically.
-
----
-
-## Design Decisions
-
-The Parser performs validation as early as possible.
-
-This follows the **fail fast** principle.
-
-Invalid commands never reach the Database.
-
-As a result, the Database only needs to verify argument values such as numeric conversions instead of checking SQL syntax.
-
----
-
-# Database
-
-## Purpose
-
-The Database class is the central coordinator of salahaDB.
-
-Every validated command eventually reaches the Database.
-
-It owns the database state and coordinates communication between every other subsystem.
-
----
-
-## Responsibilities
-
-The Database class is responsible for
-
-- INSERT
-- SELECT
-- UPDATE
-- DELETE
-- FIND
-- VACUUM
-- DROP
-- HELP
-- STATS
-
-It also
-
-- manages IDs
-- maintains indexes
-- coordinates page management
-- saves changes
-- loads existing databases
-
----
-
-## Member Variables
-
-### nextID
-
-Stores the next available record ID.
-
-During startup, the Database scans every loaded record to determine the highest existing ID.
-
-The next inserted record receives
-
-```
-largestID + 1
-```
-
-This guarantees IDs remain unique across restarts.
-
----
-
-### PageManager
-
-Owns every page currently loaded into memory.
-
-The Database never inserts records directly into Pages.
-
-Instead, it asks the PageManager to find a page with enough free space.
-
----
-
-### StorageEngine
-
-Handles all disk input and output.
-
-The Database never opens files directly.
-
-Instead, it simply calls
-
-```
-save()
-
-load()
-```
-
-and lets the StorageEngine handle persistence.
-
----
-
-### BPlusTree
-
-The primary index.
-
-Maps
-
-```
-Record ID
-
-↓
-
-RecordLocation
-```
-
-This allows FIND, UPDATE, and DELETE to avoid scanning every record.
-
----
-
-### Secondary Indexes
-
-Two hash tables are maintained.
-
-```
-Age
-
-↓
-
-vector<IDs>
-```
-
-and
-
-```
-Name
-
-↓
-
-vector<IDs>
-```
-
-These indexes accelerate
-
-```
-SELECT WHERE age
-
-SELECT WHERE name
-```
-
-without affecting the primary key index.
-
----
-
-## Why make Database the coordinator?
-
-Every subsystem has a different responsibility.
-
-The Database coordinates them without allowing them to depend heavily on one another.
-
-For example,
-
-Pages never know about indexes.
-
-The StorageEngine never knows about SQL commands.
-
-The Parser never knows about pages.
-
-This separation greatly reduces coupling.
 
 # 4. Storage Architecture
 
-Unlike many beginner database projects that store records directly in a text file, salahaDB stores data using fixed-size binary pages.
+salahaDB stores records in a custom binary file made of fixed-size pages.
 
-This closely follows the architecture used by modern database systems such as SQLite, PostgreSQL, and SQL Server, where data is organized into pages instead of individual records.
+## File Layout
 
-The storage subsystem is composed of four classes:
-
-- Page
-- PageManager
-- Serializer
-- StorageEngine
-
-Each class performs one specific task.
-
-```
-Database
-    │
-    ▼
-PageManager
-    │
-    ▼
-Page
-    │
-    ▼
-Serializer
-    │
-    ▼
-StorageEngine
-    │
-    ▼
-salaha.db
+```text
++----------------------+
+| Database Header      |
++----------------------+
+| Page 0 - 4096 bytes  |
++----------------------+
+| Page 1 - 4096 bytes  |
++----------------------+
+| Page 2 - 4096 bytes  |
++----------------------+
+| ...                  |
++----------------------+
 ```
 
----
+The total database size is:
 
-# Page
-
-## Purpose
-
-A Page represents one fixed-size block of storage.
-
-Instead of writing individual records directly to disk, records are grouped into pages.
-
-Each page has a maximum size of
-
+```text
+Database header + (number of pages × 4096 bytes)
 ```
-4096 bytes
-```
-
-This matches the page size commonly used by operating systems and many database engines.
-
----
-
-## Responsibilities
-
-A Page is responsible for
-
-- storing records
-- tracking used space
-- determining whether another record fits
-- serializing itself
-- deserializing itself
-- updating records while maintaining page size
-
-A Page does **not**
-
-- search records
-- assign IDs
-- manage indexes
-- read or write files
-
----
 
 ## Page Layout
 
-Every page begins with a small header.
+Each page occupies exactly 4096 bytes.
 
-```
+```text
 +--------------------------------+
 | Page ID                        |
 +--------------------------------+
@@ -907,2782 +290,916 @@ Every page begins with a small header.
 +--------------------------------+
 | Record Count                   |
 +--------------------------------+
-| Record                         |
+| Serialized Records             |
 +--------------------------------+
-| Record                         |
-+--------------------------------+
-| Record                         |
-+--------------------------------+
-| Padding                        |
+| Zero Padding                   |
 +--------------------------------+
 ```
 
-The remaining unused bytes are padded with zeros so that every page always occupies exactly
+A page tracks its used space so that it can quickly determine whether another record will fit.
 
-```
-4096 bytes
-```
+Before insertion:
 
----
-
-## Why Fixed-Size Pages?
-
-Using pages has several advantages.
-
-- Reduces disk I/O
-- Keeps storage organized
-- Simplifies free-space tracking
-- Makes future caching possible
-- Mirrors real database engines
-
-Without pages, every insert would require shifting data throughout the file.
-
-Pages isolate changes to a single block.
-
----
-
-## Space Management
-
-Each page keeps track of
-
-```
-usedSize
+```text
+used size + new record size <= 4096
 ```
 
-instead of recalculating its size every time.
+Before an update:
 
-Before inserting a record,
-
-```
-canFit()
-```
-
-checks whether enough free space remains.
-
-```
-usedSize
-+
-newRecordSize
-
-<=
-
-4096
+```text
+new used size =
+current used size
+- old record size
++ updated record size
 ```
 
-If the record fits, it is inserted.
-
-Otherwise, the PageManager creates another page.
-
----
-
-## Record Updates
-
-Updating a record is slightly more complicated than inserting.
-
-The updated record may be larger than the original.
-
-Before replacing the record,
-
-the page calculates
-
-```
-newUsedSize
-
-=
-
-currentUsedSize
-
--
-
-oldRecordSize
-
-+
-
-newRecordSize
-```
-
-If the new size exceeds
-
-```
-4096 bytes
-```
-
-the update is rejected.
-
-This prevents page overflow.
-
----
-
-# PageManager
-
-## Purpose
-
-The PageManager owns every page currently loaded into memory.
-
-It acts as the bridge between the Database and individual pages.
-
-The Database never inserts records directly into a Page.
-
-Instead,
-
-```
-Database
-
-↓
-
-PageManager
-
-↓
-
-Page
-```
-
----
-
-## Responsibilities
-
-The PageManager is responsible for
-
-- creating new pages
-- finding a page with available space
-- returning pages
-- compacting pages
-- returning all records
-
-It does **not**
-
-- write files
-- maintain indexes
-- parse commands
-
----
-
-## Inserting Records
-
-When a record is inserted,
-
-the PageManager searches each page.
-
-```
-Page 0
-
-↓
-
-fits?
-
-↓
-
-No
-
-↓
-
-Page 1
-
-↓
-
-fits?
-
-↓
-
-Yes
-
-↓
-
-Insert
-```
-
-If no page has enough free space,
-
-a new page is automatically created.
-
----
-
-## Compacting Pages
-
-VACUUM uses the PageManager to rebuild storage.
-
-The process is
-
-```
-Collect active records
-
-↓
-
-Delete every page
-
-↓
-
-Create new pages
-
-↓
-
-Insert active records again
-```
-
-Deleted records disappear completely.
-
-Pages become tightly packed again.
-
----
-
-# Serializer
-
-## Purpose
-
-The Serializer converts Record objects into binary data.
-
-It also performs the reverse operation.
-
-```
-Record
-
-↓
-
-Binary Bytes
-
-↓
-
-Record
-```
-
-This keeps storage independent of the Record class.
-
----
-
-## Why Separate Serialization?
-
-Without a Serializer,
-
-Page would need to understand
-
-- strings
-- integers
-- binary layout
-- disk format
-
-Separating serialization gives every class one responsibility.
-
----
+The update is rejected if the new record would overflow the page.
 
 ## Binary Record Layout
 
-Each record is stored as
+Each record is serialized in the following order:
 
-```
-ID
-
-4 bytes
-
-↓
-
-Age
-
-4 bytes
-
-↓
-
-Deleted Flag
-
-1 byte
-
-↓
-
-Name Length
-
-4 bytes
-
-↓
-
-Name Characters
-
-Variable Length
+```text
++-----------------------+
+| ID - 4 bytes          |
++-----------------------+
+| Age - 4 bytes         |
++-----------------------+
+| Deleted Flag - 1 byte |
++-----------------------+
+| Name Length - 4 bytes |
++-----------------------+
+| Name Characters       |
++-----------------------+
 ```
 
-Strings are stored using
+Storing the name length before the characters allows names to have different lengths without using a fixed-size string buffer.
 
-```
-length
+## Persistence Strategy
 
-+
+Every successful modifying command saves the database immediately:
 
-characters
-```
+* `INSERT`
+* `UPDATE`
+* `DELETE`
+* `VACUUM`
+* `DROP DATABASE CONFIRM`
 
-instead of a fixed-size buffer.
-
-This allows names of different lengths.
+This approach increases disk writes but reduces the risk of losing completed operations if the application closes unexpectedly.
 
 ---
-
-## Record Size
-
-The Serializer also calculates
-
-```
-getRecordSize()
-```
-
-This is used by Pages to determine
-
-- free space
-- page overflow
-- update validity
-
----
-
-# StorageEngine
-
-## Purpose
-
-The StorageEngine is responsible for all disk input and output.
-
-It is the only class that opens
-
-```
-salaha.db
-```
-
-No other class performs file operations.
-
----
-
-## Responsibilities
-
-The StorageEngine
-
-- loads pages
-- saves pages
-- validates database files
-- writes headers
-- writes pages
-
-It does **not**
-
-- understand SQL
-- search records
-- manage indexes
-
----
-
-## Database Header
-
-Every database begins with
-
-```
-+----------------------+
-| Magic Number         |
-+----------------------+
-| Version              |
-+----------------------+
-| Page Size            |
-+----------------------+
-```
-
-The header allows the database to detect
-
-- corrupted files
-- incompatible versions
-- invalid page sizes
-
-before loading any pages.
-
----
-
-## File Layout
-
-A complete database file looks like
-
-```
-Database Header
-
-↓
-
-Page 0
-
-↓
-
-Page 1
-
-↓
-
-Page 2
-
-↓
-
-...
-```
-
-Each page always occupies
-
-```
-4096 bytes
-```
-
-making page locations easy to calculate.
-
----
-
-## Error Detection
-
-During loading,
-
-the StorageEngine verifies
-
-- file exists
-- header exists
-- magic number
-- database version
-- page size
-- file size
-- page integrity
-
-If any validation fails,
-
-the database exits immediately rather than attempting to load corrupted data.
-
-This follows the fail-fast principle.
-
----
-
-# Summary
-
-The storage subsystem is responsible for converting in-memory records into a persistent binary database.
-
-Each class performs one specific task.
-
-| Class | Responsibility |
-|--------|----------------|
-| Page | Stores records inside one 4096-byte page |
-| PageManager | Owns and manages every page |
-| Serializer | Converts records to and from binary |
-| StorageEngine | Reads and writes pages to disk |
-
-Keeping these responsibilities separate makes the storage layer modular, easier to debug, and easier to extend in future versions.
 
 # 5. Indexing System
 
-Searching every record one by one becomes increasingly expensive as the database grows.
+salahaDB maintains its indexes in memory.
 
-Without indexes, operations such as
-
-- FIND
-- UPDATE
-- DELETE
-- SELECT WHERE
-
-would require scanning every record in every page.
-
-To avoid this, salahaDB maintains indexes entirely in memory.
-
-The project uses two different indexing strategies because different types of queries have different requirements.
-
-```
+```text
                 Database
                     │
         ┌───────────┴────────────┐
         ▼                        ▼
  Primary Index             Secondary Indexes
-    B+ Tree               unordered_map
+    B+ Tree                  Hash Tables
         │                        │
         ▼                        ▼
- RecordLocation          vector<Record IDs>
+ RecordLocation          Vectors of Record IDs
 ```
 
----
+## Primary B+ Tree Index
 
-# Primary Index (B+ Tree)
+The B+ Tree maps:
 
-## Purpose
-
-The primary index maps
-
-```
-Record ID
-
-↓
-
-RecordLocation
-```
-
-Every record has exactly one unique ID.
-
-Because IDs are unique, a B+ Tree is an ideal data structure for storing them.
-
----
-
-## Why a B+ Tree?
-
-Several data structures were considered.
-
-| Structure | Lookup | Ordered | Range Search |
-|------------|--------|----------|--------------|
-| Vector | O(n) | Yes | O(n) |
-| Hash Table | O(1) average | No | Poor |
-| Binary Search Tree | O(log n) average | Yes | Good |
-| **B+ Tree** | **O(log n)** | **Yes** | **Excellent** |
-
-The B+ Tree was chosen because it supports both
-
-- fast single-record lookups
-- efficient range queries
-
-This allows commands such as
-
-```
-FIND 100
-```
-
-and
-
-```
-SELECT * FROM records
-WHERE id BETWEEN 50 AND 100
-```
-
-to use the same index efficiently.
-
----
-
-## What is Stored?
-
-The B+ Tree does **not** store records.
-
-Instead, each leaf stores
-
-```
-ID
-
-↓
-
-RecordLocation
-```
-
-Example
-
-```
-100
-
-↓
-
-Page 3
-
-↓
-
-Slot 8
-```
-
-The actual record remains inside the Page.
-
----
-
-## RecordLocation
-
-RecordLocation contains
-
-```
-pageIndex
-
-slotIndex
-```
-
-Using a location instead of a pointer keeps the index independent of memory addresses.
-
-Whenever a record is needed,
-
-the Database retrieves it using
-
-```
-PageManager
-
-↓
-
-Page
-
-↓
-
-Record
-```
-
----
-
-# B+ Tree Structure
-
-The tree consists of two node types.
-
-## Internal Nodes
-
-Internal nodes contain
-
-- keys
-- child pointers
-
-They never store records.
-
-Their only purpose is directing searches.
-
-Example
-
-```
-          [40 | 90]
-
-         /     |      \
-
-      ...    ...     ...
-```
-
----
-
-## Leaf Nodes
-
-Leaf nodes contain
-
-- keys
-- RecordLocations
-
-Leaf nodes are linked together using
-
-```
-nextLeaf
-```
-
-Example
-
-```
-Leaf
-
-1
-
-↓
-
-2
-
-↓
-
-3
-
-↓
-
-4
-```
-
-This linked-list structure makes range searches extremely efficient.
-
----
-
-# Insert
-
-Insertion follows these steps.
-
-```
-Find Leaf
-
-↓
-
-Insert Key
-
-↓
-
-Overflow?
-
-↓
-
-No
-
-Done
-```
-
-If the node exceeds the maximum number of keys,
-
-```
-Split Node
-
-↓
-
-Promote Separator
-
-↓
-
-Update Parent
-```
-
-The process continues until the tree becomes balanced.
-
----
-
-# Delete
-
-Deletion follows the opposite process.
-
-```
-Remove Key
-
-↓
-
-Node Too Small?
-
-↓
-
-No
-
-Done
-```
-
-If the node falls below the minimum size,
-
-the tree attempts
-
-1. Borrow from left sibling
-2. Borrow from right sibling
-3. Merge nodes
-
-This guarantees that the tree always satisfies the B+ Tree properties.
-
----
-
-# Range Search
-
-Range searches take advantage of linked leaf nodes.
-
-Example
-
-```
-SELECT
-WHERE id BETWEEN 100 AND 200
-```
-
-The algorithm performs
-
-```
-Find first leaf
-
-↓
-
-Walk linked leaves
-
-↓
-
-Stop at 200
-```
-
-No unnecessary nodes are visited.
-
----
-
-# Secondary Indexes
-
-The project also maintains two secondary indexes.
-
-```
-Age
-
-↓
-
-vector<ID>
-```
-
-and
-
-```
-Name
-
-↓
-
-vector<ID>
-```
-
-Both indexes use
-
-```
-std::unordered_map
-```
-
----
-
-## Why Hash Tables?
-
-Unlike IDs,
-
-names and ages are not unique.
-
-Multiple records can share
-
-- the same name
-- the same age
-
-A hash table allows each value to point to multiple IDs.
-
-Example
-
-```
-Age
-
-22
-
-↓
-
-1
-
-↓
-
-14
-
-↓
-
-31
-
-↓
-
-57
-```
-
-The Database then performs
-
-```
-ID
-
-↓
-
-Primary Index
-
-↓
-
-RecordLocation
-
-↓
-
-Record
-```
-
----
-
-## Why Store IDs Instead of Records?
-
-The secondary indexes intentionally store IDs instead of complete records.
-
-```
-Age
-
-↓
-
-vector<ID>
-```
-
-instead of
-
-```
-Age
-
-↓
-
-vector<Record>
-```
-
-This avoids storing duplicate copies of records.
-
-The actual record exists in only one place.
-
-```
-Pages
-```
-
-Every index simply references it.
-
----
-
-# Index Maintenance
-
-Indexes are updated whenever records change.
-
-## INSERT
-
-```
-Insert Record
-
-↓
-
-Primary Index
-
-↓
-
-Secondary Indexes
-```
-
----
-
-## UPDATE
-
-Updating requires
-
-```
-Remove old values
-
-↓
-
-Modify record
-
-↓
-
-Insert new values
-```
-
-Both name and age indexes are updated if necessary.
-
----
-
-## DELETE
-
-Deleting a record removes
-
-- the primary index entry
-- the secondary index entries
-
-The record itself remains on disk until VACUUM.
-
-This is known as **soft deletion**.
-
----
-
-## VACUUM
-
-VACUUM rebuilds every index from scratch.
-
-```
-Compact Pages
-
-↓
-
-Clear Indexes
-
-↓
-
-Scan Every Record
-
-↓
-
-Rebuild Primary Index
-
-↓
-
-Rebuild Secondary Indexes
-```
-
-Rebuilding guarantees every index remains consistent with the compacted pages.
-
----
-
-# Time Complexity
-
-| Operation | Complexity |
-|------------|-----------|
-| FIND | O(log n) |
-| INSERT | O(log n) |
-| DELETE | O(log n) |
-| UPDATE | O(log n) |
-| SELECT WHERE ID BETWEEN | O(log n + k) |
-| SELECT WHERE age | O(1) average + matches |
-| SELECT WHERE name | O(1) average + matches |
-
-where **k** is the number of matching records.
-
----
-
-# Summary
-
-The indexing subsystem combines two complementary approaches.
-
-The B+ Tree provides efficient ordered access using unique IDs.
-
-The hash tables provide extremely fast lookups for non-unique fields such as names and ages.
-
-Together, these indexes eliminate the need for full table scans in the most common queries while keeping only one physical copy of each record.
-
-# 6. Database Operations
-
-This chapter describes what happens internally when each supported command is executed.
-
-Although each command performs a different task, they all follow the same high-level execution pipeline.
-
-```
-User Input
-
-↓
-
-Parser
-
-↓
-
-Command
-
-↓
-
-Database
-
-↓
-
-Indexes / Pages
-
-↓
-
-Storage Engine
-
-↓
-
-Disk
-```
-
-The Parser validates syntax.
-
-The Database performs the requested operation.
-
-If data changes, the StorageEngine immediately saves the updated pages to disk.
-
----
-
-# INSERT
-
-Example
-
-```sql
-INSERT INTO records VALUES Alice 22
-```
-
-Execution flow
-
-```
-User Input
-
-↓
-
-Parser
-
-↓
-
-Database::insert()
-
-↓
-
-Generate new ID
-
-↓
-
-Create Record
-
-↓
-
-PageManager::insertRecord()
-
-↓
-
-Update Indexes
-
-↓
-
-StorageEngine::save()
-
-↓
-
-Success
-```
-
-### Step 1
-
-The parser validates the SQL syntax.
-
-If the syntax is incorrect, execution stops immediately.
-
----
-
-### Step 2
-
-The Database assigns the next available ID.
-
-```
-nextID = largestExistingID + 1
-```
-
-The user never specifies an ID.
-
----
-
-### Step 3
-
-A Record object is created.
-
-```
-Record
-
-ID
-
-Name
-
-Age
-
-Deleted = false
-```
-
----
-
-### Step 4
-
-The PageManager searches for a page with enough free space.
-
-```
-Page 0
-
-↓
-
-Fits?
-
-↓
-
-No
-
-↓
-
-Page 1
-
-↓
-
-Fits?
-
-↓
-
-Yes
-
-↓
-
-Insert
-```
-
-If no page has enough room,
-
-a new page is automatically created.
-
----
-
-### Step 5
-
-After insertion,
-
-all indexes are updated.
-
-```
-Primary Index
-
-↓
-
-ID
-
-↓
-
-RecordLocation
-```
-
-```
-Secondary Indexes
-
-↓
-
-Age
-
-↓
-
-ID
-```
-
-```
-Name
-
-↓
-
-ID
-```
-
----
-
-### Step 6
-
-The StorageEngine writes every page back to disk.
-
-The insert is now persistent.
-
----
-
-# FIND
-
-Example
-
-```sql
-FIND 42
-```
-
-Execution flow
-
-```
-Parser
-
-↓
-
-Primary Index
-
-↓
-
-RecordLocation
-
-↓
-
-Page
-
-↓
-
-Record
-
-↓
-
-Print
-```
-
-The database does **not** scan every page.
-
-Instead,
-
-the B+ Tree immediately returns the record's location.
-
----
-
-# SELECT
-
-Several SELECT variants are supported.
-
----
-
-## SELECT *
-
-```
-SELECT * FROM records
-```
-
-Execution flow
-
-```
-PageManager
-
-↓
-
-All Pages
-
-↓
-
-All Records
-
-↓
-
-Skip Deleted Records
-
-↓
-
-Print
-```
-
-Every active record is printed.
-
----
-
-## SELECT WHERE name
-
-```
-SELECT * FROM records
-WHERE name = Alice
-```
-
-Execution flow
-
-```
-Hash Table
-
-↓
-
-Matching IDs
-
-↓
-
-Primary Index
-
-↓
-
-RecordLocation
-
-↓
-
-Record
-
-↓
-
-Print
-```
-
-No table scan is required.
-
----
-
-## SELECT WHERE age
-
-The process is identical.
-
-```
-Age
-
-↓
-
-Hash Table
-
-↓
-
-IDs
-
-↓
-
-Primary Index
-
-↓
-
-Records
-```
-
----
-
-## SELECT WHERE id BETWEEN
-
-Execution flow
-
-```
-Primary Index
-
-↓
-
-Range Search
-
-↓
-
-RecordLocations
-
-↓
-
-Records
-
-↓
-
-Print
-```
-
-The linked leaf nodes of the B+ Tree allow the range to be scanned efficiently.
-
----
-
-## SELECT ORDER BY
-
-Execution flow
-
-```
-All Records
-
-↓
-
-Temporary Vector
-
-↓
-
-std::sort()
-
-↓
-
-Print
-```
-
-Sorting is performed on a temporary copy of the records.
-
-The records stored inside the database remain unchanged.
-
----
-
-# UPDATE
-
-Example
-
-```sql
-UPDATE records
-SET name = Bob age = 30
-WHERE id = 5
-```
-
-Execution flow
-
-```
-Primary Index
-
-↓
-
-Locate Record
-
-↓
-
-Update Page
-
-↓
-
-Update Secondary Indexes
-
-↓
-
-Save Database
-```
-
----
-
-### Step 1
-
-The B+ Tree locates the record.
-
----
-
-### Step 2
-
-The Page checks whether the updated record still fits.
-
-If the updated record would exceed the page size,
-
-the update is rejected.
-
----
-
-### Step 3
-
-Old secondary index entries are removed.
-
-```
-Old Name
-
-↓
-
-Remove ID
-```
-
-```
-Old Age
-
-↓
-
-Remove ID
-```
-
----
-
-### Step 4
-
-New entries are inserted.
-
-```
-New Name
-
-↓
-
-ID
-```
-
-```
-New Age
-
-↓
-
-ID
-```
-
----
-
-### Step 5
-
-The updated pages are written back to disk.
-
----
-
-# DELETE
-
-Example
-
-```sql
-DELETE FROM records
-WHERE id = 8
-```
-
-Execution flow
-
-```
-Primary Index
-
-↓
-
-Locate Record
-
-↓
-
-Remove Index Entries
-
-↓
-
-Mark Deleted
-
-↓
-
-Save
-```
-
-Records are **not** physically removed.
-
-Instead,
-
-```
-deleted = true
-```
-
-This is known as **soft deletion**.
-
-The physical space remains allocated until VACUUM.
-
----
-
-# VACUUM
-
-VACUUM permanently removes deleted records.
-
-Execution flow
-
-```
-Read Active Records
-
-↓
-
-Delete Existing Pages
-
-↓
-
-Create Fresh Pages
-
-↓
-
-Reinsert Records
-
-↓
-
-Rebuild Indexes
-
-↓
-
-Save Database
-```
-
-After VACUUM,
-
-- deleted records disappear permanently
-- pages become compact
-- indexes are rebuilt
-
----
-
-# DROP DATABASE
-
-Execution flow
-
-```
-Clear Pages
-
-↓
-
-Clear Indexes
-
-↓
-
-Reset nextID
-
-↓
-
-Save Empty Database
-```
-
-After DROP,
-
-the database still exists,
-
-but contains zero records.
-
----
-
-# STATS
-
-The STATS command does not modify the database.
-
-It calculates
-
-- total records
-- active records
-- deleted records
-- page count
-- page size
-- total database size
-
-using the pages currently loaded in memory.
-
----
-
-# HELP
-
-HELP simply prints the list of supported commands.
-
-No pages or indexes are accessed.
-
----
-
-# EXIT
-
-EXIT immediately terminates the program.
-
-Because salahaDB saves after every modifying operation,
-
-there is nothing additional to write during exit.
-
-The command only ends the application.
-
----
-
-# Persistence Strategy
-
-Every modifying command
-
-- INSERT
-- UPDATE
-- DELETE
-- VACUUM
-- DROP
-
-calls
-
-```
-Database::save()
-```
-
-immediately after completing successfully.
-
-This approach prioritizes reliability over write performance.
-
-If the application crashes,
-
-all previously completed operations have already been written to disk.
-
----
-
-# Summary
-
-Every command follows the same general execution model.
-
-```
-Parser
-
-↓
-
-Database
-
-↓
-
-Pages
-
-↓
-
-Indexes
-
-↓
-
-Storage Engine
-
-↓
-
-Disk
-```
-
-Each subsystem performs only one responsibility, making the execution pipeline predictable, modular, and easy to extend.
-
-# 7. Design Decisions and Trade-offs
-
-Every major component of salahaDB was designed by considering multiple possible implementations.
-
-In many cases there was no single "correct" solution. Instead, the chosen design balanced simplicity, correctness, maintainability, and performance.
-
-This section explains the reasoning behind those decisions.
-
----
-
-# Why Binary Storage Instead of Text?
-
-The earliest versions of the project stored records as text.
-
-Example
-
-```
-1 Alice 22 false
-```
-
-Although text files are easy to debug, they have several disadvantages.
-
-- Larger file sizes
-- Slower reading and writing
-- Difficult to support pages
-- Difficult to detect corruption
-- Not representative of real databases
-
-Binary storage was chosen because it
-
-- reduces storage size
-- allows fixed-size pages
-- provides predictable layouts
-- more closely resembles production database engines
-
----
-
-# Why Fixed-Size Pages?
-
-Instead of storing one record after another, salahaDB stores records inside fixed-size pages.
-
-```
-Database
-
-↓
-
-Page 0
-
-↓
-
-Page 1
-
-↓
-
-Page 2
-```
-
-Using pages provides several benefits.
-
-- Simplifies disk I/O
-- Makes free-space tracking easier
-- Supports future caching
-- Matches the architecture of modern database systems
-
-The page size was chosen to be
-
-```
-4096 bytes
-```
-
-because this is a common memory page size used by operating systems.
-
----
-
-# Why Separate StorageEngine and Serializer?
-
-Initially, serialization logic could have been placed directly inside the StorageEngine.
-
-Instead, serialization was moved into its own class.
-
-```
-Record
-
-↓
-
-Serializer
-
-↓
-
-StorageEngine
-```
-
-This separation has several advantages.
-
-- StorageEngine only performs file operations.
-- Serializer only converts objects into bytes.
-- Record remains a simple data structure.
-
-Each class has one responsibility.
-
----
-
-# Why Use a B+ Tree?
-
-Several indexing strategies were considered.
-
-| Structure | Lookup | Ordered | Range Queries |
-|-----------|---------|----------|---------------|
-| Vector | O(n) | Yes | Slow |
-| Hash Table | O(1) average | No | Poor |
-| Binary Search Tree | O(log n) average | Yes | Good |
-| B+ Tree | O(log n) | Yes | Excellent |
-
-The B+ Tree was selected because it supports both
-
-- fast primary-key lookups
-- efficient range searches
-
-This allows commands such as
-
-```
-FIND 100
-```
-
-and
-
-```
-SELECT * FROM records
-WHERE id BETWEEN 50 AND 100
-```
-
-to use the same index efficiently.
-
----
-
-# Why Use Hash Tables for Name and Age?
-
-Unlike IDs,
-
-names and ages are not unique.
-
-A B+ Tree would work, but it would introduce unnecessary complexity.
-
-Instead,
-
-```
-unordered_map
-
-↓
-
-vector<ID>
-```
-
-provides very fast average-case lookups while allowing multiple records to share the same key.
-
-This makes
-
-```
-SELECT WHERE age
-
-SELECT WHERE name
-```
-
-very efficient.
-
----
-
-# Why Store RecordLocation Instead of Record?
-
-The primary index stores
-
-```
-RecordLocation
-
-↓
-
-Page Index
-
-Slot Index
-```
-
-instead of storing entire records.
-
-This avoids duplicating data.
-
-There is always exactly one copy of each record stored inside the pages.
-
-The indexes simply point to it.
-
----
-
-# Why Use Soft Deletes?
-
-Deleting a record does not immediately remove it from disk.
-
-Instead,
-
-```
-deleted = true
-```
-
-is set.
-
-This approach has several advantages.
-
-- No page shifting
-- Simpler implementation
-- Faster deletes
-- Easier debugging
-
-The downside is wasted space.
-
-To recover unused space,
-
-the database provides
-
+```text
+Record ID → RecordLocation
 ```
-VACUUM
-```
-
-which permanently removes deleted records.
 
----
+It is used by:
 
-# Why Rebuild Indexes During VACUUM?
+* `FIND`
+* `UPDATE`
+* `DELETE`
+* ID range queries
 
-After compacting pages,
+The B+ Tree was selected because it supports ordered keys, logarithmic searches, and efficient range queries.
 
-record locations change.
+Internal nodes store separator keys and child pointers. Leaf nodes store IDs and record locations. Leaf nodes are linked together, allowing range queries to continue through adjacent leaves without restarting the search.
 
-Because every RecordLocation stores
+Example:
 
+```text
+SELECT * FROM records WHERE id BETWEEN 50 AND 100
 ```
-Page
 
-↓
+Execution:
 
-Slot
+```text
+Locate the first matching leaf
+    ↓
+Traverse linked leaves
+    ↓
+Stop after ID 100
 ```
-
-all indexes must be updated.
-
-Rather than updating every location individually,
-
-salahaDB clears every index and rebuilds them by scanning the compacted pages.
-
-Although rebuilding takes longer,
-
-the implementation is simpler and guarantees consistency.
-
----
-
-# Why Save After Every Modification?
-
-Whenever one of the following commands succeeds
-
-- INSERT
-- UPDATE
-- DELETE
-- VACUUM
-- DROP
-
-the database immediately writes all pages to disk.
-
-Advantages
-
-- Excellent reliability
-- Very little risk of data loss
-- Simple implementation
-
-Disadvantages
-
-- More disk writes
-- Slower bulk inserts
-
-This trade-off was intentionally chosen because correctness was prioritized over performance.
-
-Future versions could improve performance using
-
-- write buffering
-- transactions
-- write-ahead logging (WAL)
-
----
-
-# Why Validate Commands in the Parser?
-
-The Parser performs syntax validation before the Database receives a command.
-
-Instead of passing raw strings,
-
-it returns a validated Command object.
-
-Advantages
-
-- Database code becomes simpler.
-- Invalid syntax is rejected immediately.
-- Parsing logic is isolated in one place.
-- Easier to add new commands later.
-
-This follows the fail-fast principle.
-
----
-
-# Why Separate Responsibilities?
-
-Every major class performs exactly one task.
-
-| Class | Responsibility |
-|--------|----------------|
-| Parser | Validate commands |
-| Database | Execute operations |
-| PageManager | Manage pages |
-| Page | Store records |
-| Serializer | Convert binary data |
-| StorageEngine | Read and write files |
-| B+ Tree | Primary indexing |
-
-Keeping responsibilities separate reduces coupling and makes each component easier to understand, debug, and test.
-
----
-
-# Current Limitations
-
-Although salahaDB implements many core database concepts, several features were intentionally left out to keep the project manageable.
-
-Current limitations include
-
-- Single table only
-- No SQL joins
-- No transactions
-- No concurrency control
-- No write-ahead logging
-- Entire database loaded into memory
-- Fixed page size
-- Single-threaded execution
-
-These limitations also provide opportunities for future improvements.
-
----
-
-# Future Improvements
-
-Possible future extensions include
-
-- Multiple tables
-- SQL joins
-- Transactions
-- Write-ahead logging (WAL)
-- LRU page cache
-- Disk-based B+ Tree
-- Secondary indexes stored on disk
-- Variable page sizes
-- Query optimizer
-- Concurrency using locks or MVCC
-
-These additions would move the project closer to the architecture of a production database system while preserving the modular design established in the current implementation.
-
-# 8. Complexity Analysis
-
-Understanding the time complexity of each operation is important when evaluating the scalability of a database system.
-
-The following estimates describe the average-case performance of the current salahaDB implementation.
-
----
-
-# Command Complexity
-
-| Command | Time Complexity | Notes |
-|----------|-----------------|-------|
-| INSERT | O(log n) | B+ Tree insert plus page insertion and index updates |
-| FIND | O(log n) | Uses the primary B+ Tree index |
-| UPDATE | O(log n) | Find record, update page, update secondary indexes |
-| DELETE | O(log n) | Remove from indexes and mark record as deleted |
-| SELECT * | O(n) | Visits every active record |
-| SELECT WHERE id BETWEEN | O(log n + k) | B+ Tree range search where *k* is the number of matching records |
-| SELECT WHERE name | O(1) average + k | Hash lookup followed by record retrieval |
-| SELECT WHERE age | O(1) average + k | Hash lookup followed by record retrieval |
-| SELECT ORDER BY | O(n log n) | Copies records and sorts using `std::sort()` |
-| VACUUM | O(n log n) | Rebuilds pages and recreates all indexes |
-| DROP DATABASE | O(1) | Clears all in-memory structures and saves an empty database |
-| HELP | O(1) | Prints static text |
-| STATS | O(n) | Counts records by scanning pages |
-
----
-
-# Data Structure Complexity
-
-## B+ Tree
-
-| Operation | Complexity |
-|-----------|------------|
-| Search | O(log n) |
-| Insert | O(log n) |
-| Delete | O(log n) |
-| Range Search | O(log n + k) |
-
-The B+ Tree remains balanced after every insertion and deletion, ensuring logarithmic performance even as the database grows.
-
----
 
 ## Secondary Hash Indexes
 
-Both secondary indexes use `std::unordered_map`.
+Two `std::unordered_map` indexes are maintained:
 
-| Operation | Average Case |
-|-----------|--------------|
-| Insert | O(1) |
-| Lookup | O(1) |
-| Delete | O(1) |
+```text
+Name → vector<Record IDs>
+Age  → vector<Record IDs>
+```
 
-These indexes map names and ages to vectors of record IDs.
+Names and ages are not unique, so each key can reference multiple record IDs.
 
-Because names and ages are not unique, multiple IDs may be associated with the same key.
+The IDs are resolved through the primary B+ Tree:
+
+```text
+Name or Age
+    ↓
+Matching IDs
+    ↓
+B+ Tree
+    ↓
+RecordLocation
+    ↓
+Record
+```
+
+This avoids storing duplicate copies of records inside the indexes.
+
+## Index Maintenance
+
+### Insert
+
+```text
+Insert record into page
+    ↓
+Add ID to B+ Tree
+    ↓
+Add ID to name index
+    ↓
+Add ID to age index
+```
+
+### Update
+
+```text
+Locate record
+    ↓
+Remove old secondary index entries
+    ↓
+Update record
+    ↓
+Insert new secondary index entries
+```
+
+### Delete
+
+```text
+Locate record
+    ↓
+Remove index entries
+    ↓
+Set deleted = true
+```
+
+### Startup and VACUUM
+
+Indexes are rebuilt by scanning all active records whenever the database is loaded or compacted.
 
 ---
 
-## Page Operations
+# 6. Database Operations
 
-| Operation | Complexity |
-|-----------|------------|
-| Check available space | O(1) |
-| Insert record | O(1) |
-| Update record | O(1) |
-| Serialize page | O(m) |
-| Deserialize page | O(m) |
+All commands follow the same general pipeline:
 
-Where **m** is the number of records stored in the page.
+```text
+User Input
+    ↓
+Parser
+    ↓
+Command
+    ↓
+Database
+    ↓
+Pages and Indexes
+    ↓
+StorageEngine
+    ↓
+Disk
+```
 
-Since page sizes are fixed at 4096 bytes, **m** is bounded by the maximum page capacity.
+## INSERT
+
+```text
+Validate command
+    ↓
+Assign next ID
+    ↓
+Create record
+    ↓
+Find or create a page
+    ↓
+Insert record
+    ↓
+Update indexes
+    ↓
+Save database
+```
+
+## FIND
+
+```text
+Search B+ Tree
+    ↓
+Retrieve RecordLocation
+    ↓
+Access page and slot
+    ↓
+Return record
+```
+
+No full table scan is required.
+
+## SELECT
+
+### Select All
+
+Scans all pages, skips soft-deleted records, and prints active records.
+
+### Filter by Name or Age
+
+Uses the appropriate hash index to retrieve matching IDs, then resolves each ID through the B+ Tree.
+
+### ID Range
+
+Uses the B+ Tree's ordered leaf nodes to retrieve records within the requested range.
+
+### Order By
+
+Copies active records into a temporary vector, sorts them using `std::sort()`, and prints the result. Stored record order is not changed.
+
+## UPDATE
+
+```text
+Locate record using B+ Tree
+    ↓
+Verify updated record fits page
+    ↓
+Remove old secondary index values
+    ↓
+Replace record
+    ↓
+Insert new secondary index values
+    ↓
+Save database
+```
+
+## DELETE
+
+Deleting a record performs a soft deletion.
+
+```text
+Locate record
+    ↓
+Remove index entries
+    ↓
+Set deleted = true
+    ↓
+Save database
+```
+
+The record continues occupying page space until `VACUUM` is executed.
+
+## VACUUM
+
+```text
+Collect active records
+    ↓
+Remove existing pages
+    ↓
+Create new pages
+    ↓
+Reinsert active records
+    ↓
+Rebuild indexes
+    ↓
+Save database
+```
+
+This permanently removes deleted records and compacts storage.
+
+## DROP DATABASE
+
+```text
+Clear pages
+    ↓
+Clear indexes
+    ↓
+Reset nextID
+    ↓
+Save empty database
+```
+
+## STATS
+
+The `STATS` command scans the loaded pages and reports information such as:
+
+* Total records
+* Active records
+* Deleted records
+* Page count
+* Page size
+* Estimated database size
 
 ---
 
-## PageManager
+# 7. Design Decisions and Trade-offs
 
-| Operation | Complexity |
-|-----------|------------|
-| Insert record | O(p) |
-| Get page | O(1) |
-| Load pages | O(p) |
-| Compact pages | O(n) |
+## Binary Storage
 
-Where:
+Binary storage was selected instead of plain text because it provides:
 
-- **p** = number of pages
-- **n** = total number of records
+* Smaller files
+* Predictable record layouts
+* Fixed-size pages
+* Better validation
+* A design closer to real storage engines
 
-Currently, the PageManager performs a linear search to find a page with available space.
+The trade-off is that database files are less human-readable.
 
-A future optimization could maintain a free-space map to reduce insertion time.
+## Fixed-Size Pages
+
+Pages simplify space tracking, storage organization, and future caching. They also isolate many changes to a single storage block.
+
+The current page size is fixed at 4096 bytes.
+
+## Separate Serialization and File I/O
+
+The `Serializer` handles binary formats, while the `StorageEngine` handles files.
+
+This allows the binary record layout to change without placing serialization logic throughout the storage code.
+
+## Record Locations Instead of Pointers
+
+Indexes store page and slot numbers rather than memory addresses.
+
+This prevents invalid references when pages are reloaded, compacted, or reconstructed.
+
+## B+ Tree and Hash Indexes
+
+Different index types are used for different query requirements:
+
+* B+ Tree for unique, ordered IDs and range queries
+* Hash tables for fast equality searches on non-unique names and ages
+
+## Soft Deletion
+
+Soft deletion makes deletes faster and avoids immediately reorganizing page contents.
+
+The trade-off is unused storage space, which is reclaimed through `VACUUM`.
+
+## Immediate Saving
+
+Saving after every modification prioritizes reliability and simplicity.
+
+The trade-off is reduced performance during workloads containing many writes.
+
+## Modular Responsibilities
+
+Each class performs one primary task. This reduces coupling and allows individual components to be modified or tested without rewriting the entire system.
 
 ---
 
-# Storage Complexity
+# 8. Complexity Analysis
 
-Each page occupies exactly
+Let:
 
-```
-4096 bytes
-```
+* **n** be the total number of records
+* **k** be the number of matching records
+* **p** be the number of pages
 
-The total database size is
+## Command Complexity
 
-```
-Database Header
+| Command        | Complexity         | Reason                                   |
+| -------------- | ------------------ | ---------------------------------------- |
+| `INSERT`       | `O(p + log n)`     | Finds page space and updates indexes     |
+| `FIND`         | `O(log n)`         | Uses the B+ Tree                         |
+| `UPDATE`       | `O(log n)`         | Locates record and updates indexes       |
+| `DELETE`       | `O(log n)`         | Locates record and removes index entries |
+| `SELECT *`     | `O(n)`             | Scans all records                        |
+| ID range query | `O(log n + k)`     | Finds first match and traverses leaves   |
+| Name query     | `O(1 + k)` average | Uses the name hash index                 |
+| Age query      | `O(1 + k)` average | Uses the age hash index                  |
+| `ORDER BY`     | `O(n log n)`       | Sorts a temporary record vector          |
+| `VACUUM`       | `O(n log n)`       | Rebuilds pages and indexes               |
+| `STATS`        | `O(n)`             | Scans all records                        |
 
-+
+The `PageManager` currently searches pages linearly to locate available space, giving page selection a complexity of `O(p)`.
 
-(number of pages × 4096 bytes)
-```
+## Memory Usage
 
-Deleted records continue occupying space until a VACUUM operation is performed.
+The entire database and all indexes are loaded into memory at startup.
 
----
+Memory usage includes:
 
-# Memory Usage
-
-At startup, the entire database is loaded into memory.
-
-Memory usage consists of
-
-- all Pages
-- all Records
-- the B+ Tree
-- secondary hash indexes
+* Pages
+* Records
+* B+ Tree nodes
+* Secondary hash indexes
 
 This simplifies implementation and improves lookup performance, but limits scalability for very large databases.
 
-Future versions could load pages on demand instead of loading the entire database.
+---
+
+# 9. Current Limitations
+
+salahaDB currently has the following limitations:
+
+* Supports one table
+* No joins
+* No transactions
+* No concurrency control
+* No write-ahead logging
+* Entire database is loaded into memory
+* Fixed 4096-byte page size
+* In-memory indexes
+* Single-threaded command execution
+* Linear search for pages with available space
+
+These limitations keep the implementation focused on the core storage, indexing, and command-processing architecture.
 
 ---
 
-# Performance Summary
+# 10. Implementation Notes
 
-The most common operations (`FIND`, `INSERT`, `UPDATE`, and `DELETE`) all execute in logarithmic time due to the use of the B+ Tree.
-
-Queries by name and age benefit from constant average-time hash table lookups.
-
-The only operations that require scanning every record are:
-
-- `SELECT *`
-- `SELECT ORDER BY`
-- `VACUUM`
-- `STATS`
-
-For the current scope of the project, this provides a good balance between simplicity, readability, and performance.
-
-# 9. Lessons Learned
-
-Building salahaDB provided practical experience implementing many of the concepts typically hidden behind commercial database systems. While the project began as a simple persistent storage engine, it gradually evolved into a modular database architecture with page-based storage, indexing, binary serialization, and SQL-like command parsing.
-
-The project reinforced several important software engineering principles.
+This section records the lower-level behavior that is most useful when returning to the project after a long period of time.
 
 ---
 
-# Separation of Responsibilities
-
-One of the biggest lessons learned was the importance of separating responsibilities between classes.
-
-Rather than creating one large class responsible for every operation, each component was given a single responsibility.
-
-For example:
-
-- The Parser only validates user input.
-- The Database coordinates operations.
-- The Page stores records.
-- The Serializer converts records to and from binary.
-- The StorageEngine performs file I/O.
-- The B+ Tree manages the primary index.
-
-Keeping responsibilities separate made the codebase significantly easier to debug, extend, and reason about.
-
----
-
-# Why Database Systems Use Pages
-
-Before this project, storing records directly in a file seemed like the simplest solution.
-
-Implementing fixed-size pages demonstrated why nearly every modern database organizes data this way.
-
-Pages provide predictable storage, simplify disk access, improve space management, and create a foundation for future features such as page caching and buffer pools.
-
-This project showed that pages are one of the fundamental building blocks of a database engine.
-
----
-
-# The Importance of Indexing
-
-Initially, every lookup required scanning every record.
-
-As the number of records increased, this approach quickly became inefficient.
-
-Implementing a B+ Tree for primary key lookups and hash-based secondary indexes demonstrated how indexing dramatically improves query performance.
-
-The project also highlighted that different query types benefit from different indexing strategies.
-
-There is no single index that is optimal for every workload.
-
----
-
-# Designing for Extensibility
-
-Several features required very little modification to existing code because the architecture was designed to be modular.
-
-For example:
-
-- Adding new commands only required extending the Parser and Database.
-- Adding secondary indexes did not require modifying the StorageEngine.
-- Binary serialization was introduced without changing the Record structure.
-
-This reinforced the value of designing components with clear interfaces and minimal coupling.
-
----
-
-# Working with Binary Data
-
-Implementing binary serialization provided experience working directly with memory layouts and file formats.
-
-Topics explored during development included:
-
-- fixed-size headers
-- binary file structures
-- serialization and deserialization
-- variable-length strings
-- page padding
-- file validation
-- corruption detection
-
-These concepts are common in systems programming but are often abstracted away by higher-level libraries.
-
----
-
-# Building Complex Data Structures
-
-The B+ Tree was the most technically challenging component of the project.
-
-Insertion required node splitting and separator promotion.
-
-Deletion required borrowing, merging, and tree rebalancing while preserving the properties of a balanced tree.
-
-Implementing these algorithms provided a much deeper understanding of balanced search trees than simply using a standard library container.
-
----
-
-# Error Handling
-
-Throughout development, the project gradually adopted a fail-fast philosophy.
-
-Examples include:
-
-- rejecting malformed commands during parsing
-- validating numeric input
-- detecting corrupted database files
-- checking page sizes during loading
-- rejecting oversized records
-- preventing page overflow during updates
-
-Detecting errors as early as possible simplified debugging and helped keep the database in a consistent state.
-
----
-
-# Future Improvements
-
-Although the current implementation supports the core functionality of a simple database engine, there are several areas that could be expanded in future versions.
-
-Potential improvements include:
-
-- Multiple tables
-- SQL joins
-- Transactions
-- Write-ahead logging (WAL)
-- Buffer pool and page caching
-- Concurrency control
-- Disk-resident indexes
-- Query optimization
-- Free-space management for pages
-- Background checkpointing
-
-Many of these features build naturally on the modular architecture already established by the project.
-
----
-
-# Final Thoughts
-
-Building salahaDB transformed many database concepts from theory into practical implementation.
-
-The project provided experience designing a storage engine, implementing binary persistence, managing fixed-size pages, maintaining multiple indexes, and organizing a moderately sized C++ codebase using object-oriented design principles.
-
-More importantly, it demonstrated that complex systems can be built incrementally by separating responsibilities, validating assumptions early, and designing each component to perform one well-defined task.
-
-# Appendix A - Internal Algorithms
-
-This appendix summarizes the core algorithms used throughout salahaDB.
-
-Rather than showing implementation details, it focuses on the high-level steps performed by each operation.
-
----
-
-# Database Startup
-
-When salahaDB starts, it reconstructs its in-memory state from the database file.
-
-Algorithm
-
-```
-Load Database Header
-
-↓
-
-Validate Header
-
-↓
-
-Read Every Page
-
-↓
-
-Deserialize Every Record
-
-↓
-
-Insert Active Records Into Indexes
-
-↓
-
-Determine Largest Record ID
-
-↓
-
-nextID = largestID + 1
+## Database Startup
+
+When salahaDB starts, it reconstructs the database and all in-memory indexes from the binary file.
+
+```text
+Open salaha.db
+    ↓
+Read DatabaseHeader
+    ↓
+Validate magic number, version, and page size
+    ↓
+Verify the remaining file size contains complete pages
+    ↓
+Read each 4096-byte page
+    ↓
+Deserialize the records stored in each page
+    ↓
+Load pages into PageManager
+    ↓
+Scan all active records
+    ↓
+Rebuild primary and secondary indexes
+    ↓
+Find the largest existing record ID
+    ↓
+Set nextID = largest ID + 1
 ```
 
-At this point, the database is ready to accept commands.
+If no database file exists, the program starts with an empty database.
+
+If the header, page size, version, or file structure is invalid, loading stops rather than attempting to use potentially corrupted data.
+
+Indexes are not stored permanently in the database file. They are rebuilt from the records whenever the database is loaded.
 
 ---
 
-# INSERT Algorithm
+## Record Lookup Process
 
-```
-Validate Input
+The B+ Tree does not store complete records. It maps record IDs to `RecordLocation` values.
 
-↓
-
-Create Record
-
-↓
-
-Assign nextID
-
-↓
-
-Find Page With Space
-
-↓
-
-Insert Record
-
-↓
-
-Update Primary Index
-
-↓
-
-Update Secondary Indexes
-
-↓
-
-Save Database
-```
-
----
-
-# FIND Algorithm
-
-```
-Search B+ Tree
-
-↓
-
+```text
+Record ID
+    ↓
+B+ Tree search
+    ↓
 RecordLocation
-
-↓
-
-Locate Page
-
-↓
-
-Locate Slot
-
-↓
-
-Return Record
+    ↓
+pageIndex and slotIndex
+    ↓
+PageManager retrieves the page
+    ↓
+Page retrieves the record
 ```
 
-No linear scan is required.
+A `RecordLocation` contains:
+
+```cpp
+struct RecordLocation {
+    size_t pageIndex;
+    size_t slotIndex;
+};
+```
+
+Using page and slot indexes instead of memory pointers prevents the index from becoming invalid when pages are reloaded or rebuilt.
 
 ---
 
-# SELECT WHERE name
+## B+ Tree Search
 
+A B+ Tree search begins at the root.
+
+```text
+Start at root
+    ↓
+Compare the target ID with separator keys
+    ↓
+Follow the matching child
+    ↓
+Repeat until reaching a leaf
+    ↓
+Search the leaf for the ID
 ```
-Hash Table
 
-↓
-
-Matching IDs
-
-↓
-
-B+ Tree
-
-↓
-
-RecordLocation
-
-↓
-
-Record
-
-↓
-
-Print
-```
+Internal nodes direct searches, while leaf nodes contain record IDs and their corresponding `RecordLocation` values.
 
 ---
 
-# SELECT WHERE age
+## B+ Tree Insertion and Splitting
 
-The algorithm is identical.
+When a new record is inserted:
 
+```text
+Locate the correct leaf
+    ↓
+Insert the ID in sorted order
+    ↓
+Node exceeds its allowed capacity?
+    ├── No → insertion is complete
+    └── Yes
+          ↓
+       Split the node
+          ↓
+       Promote a separator key to the parent
+          ↓
+       Parent exceeds capacity?
+          ├── No → insertion is complete
+          └── Yes → split the parent
 ```
-Age Hash Table
 
-↓
+Splitting may continue upward through the tree.
 
-Matching IDs
+If the root splits, a new root is created and the tree increases in height.
 
-↓
-
-Primary Index
-
-↓
-
-Record
-
-↓
-
-Print
-```
+Leaf nodes remain linked using `nextLeaf`, which allows range queries to continue directly from one leaf to the next.
 
 ---
 
-# SELECT WHERE id BETWEEN
+## B+ Tree Deletion and Rebalancing
 
+When a record is deleted, its ID is removed from the B+ Tree.
+
+```text
+Locate the leaf containing the ID
+    ↓
+Remove the ID and RecordLocation
+    ↓
+Node still satisfies the minimum size?
+    ├── Yes → deletion is complete
+    └── No
+          ↓
+       Try borrowing from the left sibling
+          ↓
+       If unavailable, try the right sibling
+          ↓
+       If borrowing is not possible, merge nodes
+          ↓
+       Update the parent separator keys
 ```
-Locate First Leaf
 
-↓
+If a merge causes the parent to fall below its minimum size, the same borrowing or merging process continues upward.
 
-Traverse Linked Leaves
+If the root is left with only one child, that child becomes the new root.
 
-↓
-
-Stop At Maximum ID
-
-↓
-
-Return Records
-```
-
-This is why the B+ Tree is well suited for range queries.
+The exact node-capacity rules are defined by the B+ Tree implementation.
 
 ---
 
-# UPDATE Algorithm
+## B+ Tree Range Queries
 
+An ID range query uses the linked leaf nodes.
+
+```text
+Search for the minimum ID
+    ↓
+Locate the first matching leaf
+    ↓
+Read matching entries from that leaf
+    ↓
+Follow nextLeaf
+    ↓
+Continue until an ID exceeds the maximum
 ```
-Locate Record
 
-↓
+This gives the range query a complexity of:
 
-Create Updated Record
-
-↓
-
-Verify Record Fits Page
-
-↓
-
-Replace Record
-
-↓
-
-Remove Old Index Entries
-
-↓
-
-Insert New Index Entries
-
-↓
-
-Save Database
+```text
+O(log n + k)
 ```
+
+where `k` is the number of matching records.
 
 ---
 
-# DELETE Algorithm
+## Index Consistency Rules
 
-```
-Locate Record
+The database maintains three indexes:
 
-↓
+```text
+Primary:
+ID → RecordLocation
 
-Remove Primary Index Entry
-
-↓
-
-Remove Secondary Index Entries
-
-↓
-
-Mark Record Deleted
-
-↓
-
-Save Database
+Secondary:
+Name → vector<Record IDs>
+Age  → vector<Record IDs>
 ```
 
-Records remain inside the page until VACUUM.
+The physical record exists only inside a page. Indexes store IDs or record locations rather than duplicate record objects.
+
+### INSERT
+
+```text
+Insert record into a page
+    ↓
+Determine its page and slot location
+    ↓
+Insert ID and RecordLocation into the B+ Tree
+    ↓
+Insert ID into the name index
+    ↓
+Insert ID into the age index
+    ↓
+Save database
+```
+
+### UPDATE
+
+The old secondary-index values must be removed before the new values are added.
+
+```text
+Locate record using the B+ Tree
+    ↓
+Save the old name and age
+    ↓
+Verify the updated record still fits inside the page
+    ↓
+Remove ID from the old name index entry
+    ↓
+Remove ID from the old age index entry
+    ↓
+Replace the record inside the page
+    ↓
+Insert ID into the new name index entry
+    ↓
+Insert ID into the new age index entry
+    ↓
+Save database
+```
+
+The primary index does not need to change if the record remains in the same page and slot.
+
+If an update were ever changed to move records between pages, the B+ Tree's `RecordLocation` would also need to be updated.
+
+### DELETE
+
+```text
+Locate record using the B+ Tree
+    ↓
+Remove ID from the B+ Tree
+    ↓
+Remove ID from the name index
+    ↓
+Remove ID from the age index
+    ↓
+Set deleted = true
+    ↓
+Save database
+```
+
+The record remains physically inside its page but is no longer reachable through the indexes.
+
+Queries that scan pages must also check the `deleted` flag and skip deleted records.
+
+### VACUUM
+
+Record locations change during compaction, so all indexes must be rebuilt.
+
+```text
+Collect active records
+    ↓
+Clear all pages
+    ↓
+Clear the B+ Tree
+    ↓
+Clear the secondary indexes
+    ↓
+Reinsert active records into new pages
+    ↓
+Create new RecordLocations
+    ↓
+Rebuild every index
+    ↓
+Save database
+```
+
+### Database Loading
+
+The same rebuilding process occurs during startup.
+
+```text
+Load and deserialize pages
+    ↓
+Clear indexes
+    ↓
+Scan all active records
+    ↓
+Insert each ID and location into the B+ Tree
+    ↓
+Insert each ID into the name and age indexes
+```
+
+Rebuilding ensures that the in-memory indexes always match the records stored in the file.
 
 ---
 
-# VACUUM Algorithm
+## Page Insertion
 
-```
-Collect Active Records
+The `PageManager` searches pages in order until it finds enough available space.
 
-↓
-
-Delete Every Page
-
-↓
-
-Create New Pages
-
-↓
-
-Reinsert Active Records
-
-↓
-
-Rebuild Every Index
-
-↓
-
-Save Database
+```text
+Check Page 0
+    ↓
+Record fits?
+    ├── Yes → insert record
+    └── No
+          ↓
+       Check next page
 ```
 
-VACUUM permanently removes deleted records and reclaims storage.
+If no existing page has enough space:
+
+```text
+Create a new page
+    ↓
+Assign its page ID
+    ↓
+Insert the record
+    ↓
+Add the page to PageManager
+```
+
+The returned page and slot indexes are stored inside the B+ Tree as the record's `RecordLocation`.
 
 ---
 
-# DROP DATABASE Algorithm
+## Record Size and Page Updates
 
+The `Serializer` calculates the binary size of each record.
+
+A record contains:
+
+```text
+ID              4 bytes
+Age             4 bytes
+Deleted flag    1 byte
+Name length     4 bytes
+Name            variable number of bytes
 ```
-Delete All Pages
 
-↓
+Before insertion:
 
-Clear Primary Index
-
-↓
-
-Clear Secondary Indexes
-
-↓
-
-Reset nextID
-
-↓
-
-Write Empty Database
+```text
+page used size + new record size <= 4096
 ```
+
+Before update:
+
+```text
+new used size =
+current used size
+- old record size
++ updated record size
+```
+
+If the new used size exceeds 4096 bytes, the update is rejected.
+
+The current implementation does not automatically move an oversized updated record to another page.
 
 ---
 
-# Page Serialization
+## Page Serialization
 
-```
-Write Page Header
+Every page must occupy exactly 4096 bytes in the database file.
 
-↓
-
-Write Record 1
-
-↓
-
-Write Record 2
-
-↓
-
-...
-
-↓
-
-Write Padding
-
-↓
-
-Exactly 4096 Bytes
+```text
+Write page header
+    ↓
+Write each serialized record
+    ↓
+Calculate unused page space
+    ↓
+Fill the remaining bytes with zeros
 ```
 
-Every page always occupies the same amount of disk space.
+When loading, the page header tells the program how many records and how many used bytes the page contains.
+
+Padding is not interpreted as record data.
 
 ---
 
-# Record Serialization
+## Persistence Behavior
 
-Each record is written in the following order.
+salahaDB saves after every successful modifying command:
 
+* `INSERT`
+* `UPDATE`
+* `DELETE`
+* `VACUUM`
+* `DROP DATABASE CONFIRM`
+
+The save process is:
+
+```text
+Database operation succeeds
+    ↓
+Database calls save()
+    ↓
+StorageEngine writes the DatabaseHeader
+    ↓
+StorageEngine serializes and writes every page
+    ↓
+File is closed
 ```
-ID
 
-↓
+Because every completed modification is written immediately, `EXIT` does not need to perform an additional database save.
 
-Age
+This design prioritizes reliability and implementation simplicity over write performance.
 
-↓
-
-Deleted Flag
-
-↓
-
-Name Length
-
-↓
-
-Name Characters
-```
-
-Variable-length names are supported by storing the string length before the characters.
+A consequence is that a single small modification may cause every page to be written again.
 
 ---
 
-# Index Rebuilding
+## Soft Deletion Behavior
 
-Whenever the database is loaded or compacted, every index is rebuilt.
+Deleting a record does not immediately reduce the database file size.
 
-```
-Clear Indexes
-
-↓
-
-Scan Every Page
-
-↓
-
-Scan Every Record
-
-↓
-
-Insert Into B+ Tree
-
-↓
-
-Insert Into Hash Tables
+```text
+deleted = true
 ```
 
-This guarantees that every index accurately reflects the current state of the database.
+The deleted record:
+
+* Remains physically stored in its page
+* Is removed from all indexes
+* Is ignored by normal queries
+* Continues occupying page space
+* Is permanently removed only by `VACUUM`
+
+This makes deletion simple and fast but causes unused space to accumulate over time.
 
 ---
 
-# Overall Execution Pipeline
+## File Validation
 
-Every command ultimately follows the same execution model.
+Before loading records, the `StorageEngine` should verify:
 
-```
-User
+* The file can be opened
+* The complete database header is present
+* The magic number identifies a salahaDB file
+* The database version is supported
+* The stored page size is 4096 bytes
+* The remaining file size is divisible by the page size
+* Every page can be deserialized successfully
+* Record data does not exceed page boundaries
 
-↓
+Validation occurs before the database begins normal command execution.
 
-main.cpp
+This prevents malformed or incompatible files from being treated as valid databases.
 
-↓
+---
 
-Parser
+## Important Invariants
 
-↓
+The following rules must remain true for the database to operate correctly:
 
-Command
+1. Every active record has a unique ID.
+2. Every active record has one B+ Tree entry.
+3. Every B+ Tree location points to the correct page and slot.
+4. Every active record appears in the correct name index.
+5. Every active record appears in the correct age index.
+6. Deleted records do not appear in any index.
+7. Every page occupies exactly 4096 bytes on disk.
+8. A page's used size never exceeds 4096 bytes.
+9. `nextID` is greater than every existing record ID.
+10. Indexes are rebuilt whenever page compaction changes record locations.
 
-↓
-
-Database
-
-↓
-
-PageManager
-
-↓
-
-Page
-
-↓
-
-Serializer
-
-↓
-
-StorageEngine
-
-↓
-
-salaha.db
-```
-
-This layered architecture keeps responsibilities separate and makes the system easier to maintain and extend.
+When debugging unexpected database behavior, these invariants should be checked first.
