@@ -13,6 +13,7 @@ add_executable(SalahaDB
     src/Serializer.cpp
     src/Page.cpp
     src/PageManager.cpp
+    src/BPlusTree.cpp
 )
 
 target_include_directories(SalahaDB PRIVATE include)
