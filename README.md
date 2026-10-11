@@ -361,19 +361,3 @@ The database detects and reports:
 * File reading failures
 * File writing failures
 
-## Benchmark vs SQLite
-
-Compared in-process against SQLite 3.45.1 (`synchronous=OFF`, same data, same machine).
-Linux, g++ 13, `-O2`, 20,000 records, per-operation time:
-
-| Operation | salahaDB | SQLite |
-|---|---|---|
-| Find by ID | 0.67 µs | 6.15 µs |
-| Select by name | 10.3 µs | 12.7 µs |
-| Insert | 1428 µs | 34 µs |
-
-salahaDB keeps all data in memory, so reads are fast, while SQLite reads from disk-backed pages.
-Writes are slower because each insert, update or delete rewrites the whole database file.
-
-To reproduce: install SQLite dev headers, then `make -C bench && ./bench/bench 1000 10000 20000`.
-
